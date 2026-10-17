@@ -14,7 +14,7 @@ TeX（annotation 优先，绝不反推）；流式、长对话、内部导航兼
   （页面控制台 `localStorage.setItem('alr-debug','1')`）。
 - 油猴版：约 1.93 MiB，内置引擎与基础字形；额外字形为固定版本 JSON（40 个区段），下载后校验哈希并缓存，不执行远程代码。两种版本以 DOM 标记互斥。
 - 2026-10-17 当前工作区已复核 typecheck、230 单元、15 扩展 e2e、7 脚本 e2e，并查看面板截图。脚本 e2e 用 GM 垫片，不能代替真实 Tampermonkey 验收；真实 chatgpt.com 历史验证见 README。
-- Mac 项目：`/Users/meta/Project/Workspaces/chatgpt-advanced-latex-renderer`；v0.1.0 曾构建并通过 148 单元测试，Chrome 加载状态尚无验收证据。
+- Mac 项目：`/Users/meta/Project/Workspaces/chatgpt-advanced-latex-renderer`；v0.2.0 已更新，类型检查、230 单元测试、扩展与脚本构建通过。Chrome 配置已有此项目 `dist` 的扩展登记；新版本重新加载和真实页面运行尚未验收。
 - 已知待确认：代码块多行公式改为内联 `display:block` 后未在真实页复看；Edge 未实测。
 - 恢复入口：`pnpm install && pnpm build`，Chrome 加载 `dist/`。用户的 Windows Chrome 已加载本项目 `dist/`
   （内容脚本主模块运行时读盘，改代码后刷新页面即可；改 manifest/content.css 需在扩展页重新加载）。
@@ -22,8 +22,9 @@ TeX（annotation 优先，绝不反推）；流式、长对话、内部导航兼
 ## Active Work
 - [完成] GitHub 公开仓库 + CI + Release 工作流。
 - [完成] Release v0.1.0（2026-10-17）：https://github.com/AlexbeatsZ/chatgpt-advanced-latex-renderer/releases/tag/v0.1.0 ，zip（约 3.5 MB，根目录即 manifest.json）+ SHA-256。
-- [进行中] 完成 v0.2.0 最终检查、提交推送、CI/Release 验证与 Mac 更新。
-- [待验收] Mac Chrome 加载扩展；真实 Tampermonkey + chatgpt.com。Windows UI 工具本轮因不能可靠识别浏览器 URL 停止，不绕过工具限制。
+- [完成] v0.2.0（2026-10-17）：实现提交 `cc5b52e`，Windows/Mac 构建和本地检查通过；GitHub CI `39027023769`、Release `39027195242` 通过，已发布扩展 zip、脚本和更新元数据： https://github.com/AlexbeatsZ/chatgpt-advanced-latex-renderer/releases/tag/v0.2.0 。
+- [完成] 从 jsDelivr 和 GitHub raw 实际请求 v0.2.0 的 arrows.json 均返回 200，数据与脚本清单一致；Mac 已同步同一实现提交。
+- [待验收] Mac Chrome 重新加载扩展；真实 Tampermonkey + chatgpt.com。Windows UI 工具本轮因不能可靠识别浏览器 URL 停止，不绕过工具限制。
 - [待办] Chrome Web Store / Edge Add-ons 上架（需用户的开发者账号）。
 - [完成] 核心渲染、DOM 适配、测试体系、文档、许可证审查（依赖全为 Apache-2.0，参考项目未复制代码）。
 
