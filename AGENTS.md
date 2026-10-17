@@ -7,7 +7,8 @@ TeX（annotation 优先，绝不反推）；流式、长对话、内部导航兼
 弹出界面含开关、模式、重新渲染、状态与错误、字号、自定义宏。
 
 ## Current State
-- 版本 0.1.0，分支 master，未推送远端（尚无 GitHub 仓库）。
+- 版本 0.1.0，分支 main，远端公开仓库 https://github.com/AlexbeatsZ/chatgpt-advanced-latex-renderer 。
+  CI（`.github/workflows/ci.yml`）每次推送 main 跑 typecheck/单元/构建/e2e；`release.yml` 在 `v*` 标签上校验版本并发布 zip。
 - 已实现：KaTeX 失败/偏好命令升级、完整模式、原文公式原位渲染（含题目卡片 label）、```latex 代码块预览失败恢复、
   懒渲染（真实滚动容器为根）、批处理观察器、关闭精确还原、选择复制/Alt+单击复制、弹出界面、调试日志
   （页面控制台 `localStorage.setItem('alr-debug','1')`）。
@@ -17,7 +18,8 @@ TeX（annotation 优先，绝不反推）；流式、长对话、内部导航兼
   （内容脚本主模块运行时读盘，改代码后刷新页面即可；改 manifest/content.css 需在扩展页重新加载）。
 
 ## Active Work
-- [待办/用户询问中] 发布：Chrome Web Store / Edge Add-ons / 油猴脚本 + GitHub 仓库（需用户确认名称、账号、是否公开）。
+- [完成] GitHub 公开仓库 + CI + Release 工作流。
+- [待办] 首个 Release（推 `v0.1.0` 标签，需用户同意）；Chrome Web Store / Edge Add-ons 上架（需用户的开发者账号）；油猴脚本版本（用户提过，未开始）。
 - [完成] 核心渲染、DOM 适配、测试体系、文档、许可证审查（依赖全为 Apache-2.0，参考项目未复制代码）。
 
 ## Build / Run / Test

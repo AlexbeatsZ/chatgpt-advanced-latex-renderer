@@ -376,16 +376,29 @@ await test('streaming: formulas appear when complete, partial ones stay raw, no 
       if (recs.some((r) => [...r.addedNodes].some((n) => n.nodeType === 1 && n.tagName === 'ALR-MATH'))) window.__applies++;
     }).observe(document.body, { childList: true, subtree: true });
   });
-  const seen = [];
-  for (const t of tokens) {
-    await page.evaluate((w) => {
+  const push = (w) =>
+    page.evaluate((w) => {
       const s = document.createElement('span');
       s.setAttribute('data-d-stream-word', '');
       s.textContent = w;
       document.getElementById('s').appendChild(s);
-    }, t);
+    }, w);
+  // Phase 1: the first formula is complete, the second one is still being typed.
+  const cut = tokens.findIndex((t) => t.includes('\\ce{2NO2')) + 1;
+  for (const t of tokens.slice(0, cut)) {
+    await push(t);
     await page.waitForTimeout(60); // ~16 tokens/s
-    seen.push(await page.evaluate(() => document.querySelectorAll('alr-math').length) - base);
+  }
+  await push('->'); // inside the unfinished \(\ce{...
+  await settle(page, 1200); // a pause in the stream
+  const mid = await inspect(page);
+  eq(mid.alr - base, 1, 'only the completed formula is rendered mid-stream');
+  assert(mid.visibleText.includes('\\(\\ce{2NO2'), 'the unfinished formula stays raw mid-stream');
+  // Phase 2: the rest of the answer (the stray "->" token is removed again, like a re-tokenized word).
+  await page.evaluate(() => document.getElementById('s').lastElementChild.remove());
+  for (const t of tokens.slice(cut)) {
+    await push(t);
+    await page.waitForTimeout(60);
   }
   await settle(page, 1200);
   const r = await inspect(page);
@@ -394,8 +407,7 @@ await test('streaming: formulas appear when complete, partial ones stay raw, no 
   assert(r.visibleText.includes('\\(x + 尚未结束'), 'incomplete formula must remain raw text');
   const applies = await page.evaluate(() => window.__applies);
   assert(applies < tokens.length / 2, `re-applied ${applies} times for ${tokens.length} tokens (batching not effective)`);
-  assert(seen.some((n) => n > 0 && n < 3), `formulas should appear progressively during streaming: ${seen.join(',')}`);
-  console.log(`   tokens=${tokens.length} applies=${applies} progress=${seen.join(',')}`);
+  console.log(`   tokens=${tokens.length} applies=${applies}`);
 });
 
 await test('React-style updates: text rewrite, element replacement, innerHTML reset -> no orphans or duplicates', async () => {
