@@ -30,6 +30,15 @@
 10. 题目卡片组件（`div[data-d-component=box]` 内的 `p` 与 `div[data-d-component=radio] > label[for] > 文本`）
     中的公式**原生完全不渲染**，以 `\(\ce{2A -> B}\)` 原文显示（该历史对话中 9 处）。
 
+11. ```latex 代码块：`div[data-code-block="true"][data-markdown-copy-text="<源码>"]` 下有
+    `[data-code-block-source]`（CodeMirror）与 `[data-code-block-preview]`。预览成功时里面是普通 KaTeX；
+    **KaTeX 失败时（如 `\ce`）预览变成 `aside[role=alert]`“LaTeX 代码无效”**（无扩展时就存在），源码只剩
+    `data-markdown-copy-text`。处理：隐藏 alert 所在的预览子元素，插入按空行切分的多行 MathJax（`src/tex/snippet.ts`）。
+    较新的回答里模型常把化学式放进这种代码块，而非行内 `\(...\)`。
+12. 消息滚动容器是 `div.thread-scroll-container`（不是 window）；块公式盒 `div.Math-*` 自身是
+    `overflow:auto`（用于横向滚动）但不纵向滚动。懒渲染的 IntersectionObserver 必须以真实滚动容器为根，
+    否则 `rootMargin` 被裁掉，公式要进入视野才替换（`src/content/lazy.ts`，只认 `scrollHeight > clientHeight` 的元素）。
+
 ## 真实页面提取层验证（只读探针，2026-10-17）
 `tests/real/probe-entry.ts` 打包为 IIFE 注入上述历史对话：5 条助手 + 5 条用户消息；159 个 KaTeX 公式
 全部恢复出源码；85 个失败、失败命令全为 `\ce`；0 个公式位于消息外；原文扫描找到 9 个未渲染公式，全部
