@@ -1,0 +1,61 @@
+name: Release
+
+# Push a tag like v0.1.0 (must equal the version in public/manifest.json and package.json).
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Check version matches tag
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          manifest=$(node -p "require('./public/manifest.json').version")
+          pkg=$(node -p "require('./package.json').version")
+          echo "tag=$tag manifest=$manifest package=$pkg"
+          test "$tag" = "$manifest" && test "$tag" = "$pkg"
+
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+      - name: Install Chromium for e2e
+        run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+
+      - name: Package
+        id: pack
+        run: |
+          name="chatgpt-advanced-latex-renderer-${GITHUB_REF_NAME}"
+          (cd dist && zip -qr "../${name}.zip" .)
+          sha256sum "${name}.zip" > "${name}.zip.sha256"
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          name="${{ steps.pack.outputs.name }}"
+          gh release create "$GITHUB_REF_NAME" "${name}.zip" "${name}.zip.sha256" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            --notes "安装：下载 ${name}.zip 并解压，在 chrome://extensions（或 edge://extensions）开启开发者模式，点“加载已解压的扩展程序”选择解压后的文件夹。该 zip 也可直接上传到 Chrome Web Store / Edge Add-ons。"

@@ -100,8 +100,10 @@ let extId;
 
 async function setup() {
   const userDir = fs.mkdtempSync(path.join(os.tmpdir(), 'alr-profile-'));
+  const exe = process.env.CHROMIUM_PATH || findChromium();
   ctx = await chromium.launchPersistentContext(userDir, {
-    executablePath: process.env.CHROMIUM_PATH || findChromium(),
+    // Extensions need full Chromium; the default headless shell cannot load them.
+    ...(exe ? { executablePath: exe } : { channel: 'chromium' }),
     headless: !headed,
     args: [`--disable-extensions-except=${extDir}`, `--load-extension=${extDir}`, '--lang=zh-CN'],
     viewport: { width: 1100, height: 900 },

@@ -1,5 +1,8 @@
 # ChatGPT Advanced LaTeX Renderer
 
+[![CI](https://github.com/AlexbeatsZ/chatgpt-advanced-latex-renderer/actions/workflows/ci.yml/badge.svg)](https://github.com/AlexbeatsZ/chatgpt-advanced-latex-renderer/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/AlexbeatsZ/chatgpt-advanced-latex-renderer)](https://github.com/AlexbeatsZ/chatgpt-advanced-latex-renderer/releases)
+
 Chrome / Edge（Manifest V3）扩展：在 chatgpt.com 上用**本地打包的 MathJax 4** 增强 LaTeX 渲染，重点支持
 mhchem 化学式（`\ce`、`\pu`）、physics 宏包、AMS 环境和自定义宏。不修改 ChatGPT 生成的内容，不上传任何数据。
 
@@ -8,7 +11,12 @@ ChatGPT 自带的 KaTeX 不认识 `\ce` 等命令：要么把命令名显示成�
 
 ## 安装（开发者模式）
 
-1. 构建（或使用已有的 `dist/`）：
+**直接下载**：在 [Releases](https://github.com/AlexbeatsZ/chatgpt-advanced-latex-renderer/releases) 下载
+`chatgpt-advanced-latex-renderer-vX.Y.Z.zip`，解压后按下面第 2～4 步加载解压出的文件夹。
+
+**从源码构建**：
+
+1. 构建：
    ```bash
    pnpm install
    ```
@@ -111,6 +119,10 @@ pnpm build && pnpm test:e2e
 - 端到端（Playwright + 真实 Chromium + 构建产物，15 个）：在 `https://chatgpt.com/` 域名下用**模拟页面**
   （按真实结构复刻，KaTeX 由真实 KaTeX 生成）测试注入、两种模式、关闭恢复、刷新后状态、深色模式、
   基线与字号、流式、React 式重渲染、题目单选交互、选择复制、Alt+单击、长对话性能、内部滚动容器预渲染、无外部请求。
+
+CI（GitHub Actions，Ubuntu）在每次推送到 `main` 时运行类型检查、单元测试、构建与端到端测试，并上传未打包扩展
+与截图。发布：把 `public/manifest.json` 与 `package.json` 的版本改为同一值，提交后推送标签 `vX.Y.Z`，
+Release 工作流会校验版本、重跑全部测试、打包 zip（附 SHA-256）并创建 GitHub Release。
 
 ## 验证状态
 
