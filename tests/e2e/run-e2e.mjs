@@ -61,6 +61,15 @@ const mainTurns = [
 ];
 addPage('main', mainTurns);
 addPage('dark', mainTurns, { dark: true });
+addPage(
+  'quiz',
+  [
+    F.assistantTurn(0, [
+      '<div data-d-component="box"><p>题 1：对于反应 \\(\\ce{2A -> B}\\)，速率等于多少？</p><div role="radiogroup"><div data-d-component="radio"><label for="r1"><div><button type="button" role="radio" id="r1" aria-checked="false"></button></div>\\(k[\\ce{A}]^2\\)</label></div></div></div>' +
+        '<script>window.__quizClicks=0;document.getElementById("r1").addEventListener("click",function(){window.__quizClicks++;this.setAttribute("aria-checked","true");this.parentElement.setAttribute("data-state","checked");});</script>',
+    ]),
+  ],
+);
 addPage('stream', [F.assistantTurn(0, [F.para('<span id="s"></span>')])]);
 
 const longTurns = [];
@@ -143,7 +152,7 @@ async function settle(page, ms = 600) {
   await page.waitForFunction(() => document.querySelectorAll('alr-math').length >= 0, null, { timeout: 5000 });
   let last = -1;
   for (let i = 0; i < 40; i++) {
-    const n = await page.evaluate(() => document.querySelectorAll('alr-math').length + document.querySelectorAll('[data-alr-hidden],[data-alr-raw-hidden]').length * 1000);
+    const n = await page.evaluate(() => document.querySelectorAll('alr-math').length + document.querySelectorAll('[data-alr-hidden], alr-text').length * 1000);
     if (n === last) return;
     last = n;
     await page.waitForTimeout(250);
@@ -152,7 +161,7 @@ async function settle(page, ms = 600) {
 
 const inspect = (page) =>
   page.evaluate(() => {
-    const visibleKatex = [...document.querySelectorAll('.katex')].filter((k) => k.getClientRects().length > 0 && !k.closest('[data-alr-hidden],[data-alr-raw-hidden]'));
+    const visibleKatex = [...document.querySelectorAll('.katex')].filter((k) => k.getClientRects().length > 0 && !k.closest('[data-alr-hidden]'));
     const alr = [...document.querySelectorAll('alr-math')].filter((m) => m.getClientRects().length > 0);
     return {
       alr: alr.length,
@@ -162,8 +171,6 @@ const inspect = (page) =>
       visibleKatex: visibleKatex.length,
       visibleKatexTex: visibleKatex.map((k) => k.querySelector('annotation')?.textContent),
       hidden: document.querySelectorAll('[data-alr-hidden]').length,
-      rawHidden: document.querySelectorAll('[data-alr-raw-hidden]').length,
-      clones: document.querySelectorAll('[data-alr-clone]').length,
       missingGlyphs: [...document.querySelectorAll('alr-math svg text')].filter((t) => !t.textContent || /[-]/.test(t.textContent)).length,
       errors: [...document.querySelectorAll('[data-alr-state="error"]')].map((e) => e.getAttribute('data-alr-error')),
       codeText: document.querySelector('.cm-content')?.textContent,
@@ -345,14 +352,14 @@ await test('streaming: formulas appear when complete, partial ones stay raw, no 
   const page = await open('stream');
   await page.waitForTimeout(500);
   const tokens = '速率方程 \\( r = k[\\mathrm{A}]^2 \\) 中，反应 \\(\\ce{2NO2 -> N2O4}\\) 的 $k$ 与温度有关，但 \\(x + 尚未结束'.split(/(?<=\s)|(?=\\\()/);
-  let renderedAt = [];
-  // Count how many times the clone is rebuilt to detect per-token re-rendering.
+  // Count how many times our nodes are (re)applied to detect per-token re-rendering.
   await page.evaluate(() => {
-    window.__cloneInserts = 0;
+    window.__applies = 0;
     new MutationObserver((recs) => {
-      for (const r of recs) for (const n of r.addedNodes) if (n.nodeType === 1 && n.hasAttribute('data-alr-clone')) window.__cloneInserts++;
+      if (recs.some((r) => [...r.addedNodes].some((n) => n.nodeType === 1 && n.tagName === 'ALR-MATH'))) window.__applies++;
     }).observe(document.body, { childList: true, subtree: true });
   });
+  const seen = [];
   for (const t of tokens) {
     await page.evaluate((w) => {
       const s = document.createElement('span');
@@ -360,39 +367,72 @@ await test('streaming: formulas appear when complete, partial ones stay raw, no 
       s.textContent = w;
       document.getElementById('s').appendChild(s);
     }, t);
-    await page.waitForTimeout(40); // ~25 tokens/s
-    renderedAt.push(await page.evaluate(() => document.querySelectorAll('alr-math').length));
+    await page.waitForTimeout(60); // ~16 tokens/s
+    seen.push(await page.evaluate(() => document.querySelectorAll('alr-math').length));
   }
   await settle(page, 1200);
   const r = await inspect(page);
   for (const t of ['r = k[\\mathrm{A}]^2', '\\ce{2NO2 -> N2O4}', 'k']) assert(r.alrTex.includes(t), `streamed formula ${t} missing: ${JSON.stringify(r.alrTex)}`);
+  eq(r.alr, 3, 'each streamed formula rendered exactly once');
   assert(r.visibleText.includes('\\(x + 尚未结束'), 'incomplete formula must remain raw text');
-  const inserts = await page.evaluate(() => window.__cloneInserts);
-  assert(inserts < tokens.length / 2, `clone rebuilt ${inserts} times for ${tokens.length} tokens (batching not effective)`);
-  console.log(`   tokens=${tokens.length} cloneRebuilds=${inserts}`);
+  const applies = await page.evaluate(() => window.__applies);
+  assert(applies < tokens.length / 2, `re-applied ${applies} times for ${tokens.length} tokens (batching not effective)`);
+  assert(seen.some((n) => n > 0 && n < 3), `formulas should appear progressively during streaming: ${seen.join(',')}`);
+  console.log(`   tokens=${tokens.length} applies=${applies} progress=${seen.join(',')}`);
 });
 
-await test('React-style re-render of a paragraph: no orphans, formula re-rendered', async () => {
+await test('React-style updates: text rewrite, element replacement, innerHTML reset -> no orphans or duplicates', async () => {
   const page = await open('main');
   await settle(page, 1500);
-  await page.evaluate(() => {
-    // Simulate React replacing a paragraph node and resetting a math container's innerHTML.
-    const p = [...document.querySelectorAll('[data-alr-raw-hidden]')][0];
-    const fresh = p.cloneNode(true);
-    fresh.removeAttribute('data-alr-raw-hidden');
+  const RAW = '原文公式：$a+b=c$，以及 \\(\\ce{2H2 + O2 -> 2H2O}\\)。售价 $5 到 $10。转义 \\$3。';
+  await page.evaluate((raw) => {
+    const p = [...document.querySelectorAll('p')].find((e) => e.textContent.includes('原文公式'));
+    // 1) React sets nodeValue on the text node we modified (same text + more).
+    const t = [...p.childNodes].find((n) => n.nodeType === 3);
+    t.data = raw + ' 追加 $z^2$';
+  }, RAW);
+  await settle(page, 1200);
+  let r = await inspect(page);
+  assert(r.alrTex.includes('z^2') && r.alrTex.filter((x) => x === 'a+b=c').length === 1, `after text rewrite: ${JSON.stringify(r.alrTex)}`);
+  await page.evaluate((raw) => {
+    // 2) React replaces the paragraph element with a fresh one.
+    const p = [...document.querySelectorAll('p')].find((e) => e.textContent.includes('原文公式'));
+    const fresh = document.createElement('p');
+    fresh.textContent = raw;
     p.replaceWith(fresh);
+    // 3) React resets a math container's innerHTML (KaTeX re-render).
     const block = document.querySelector('[data-alr-hidden]').parentElement;
-    block.innerHTML = block.innerHTML.replace(/data-alr-hidden=""/g, '').replace(/<alr-math[\s\S]*?<\/alr-math>/g, '');
-  });
+    block.innerHTML = block.innerHTML.replace(/ data-alr-hidden=""/g, '').replace(/<alr-math[\s\S]*?<\/alr-math>/g, '');
+  }, RAW);
   await settle(page, 1500);
+  r = await inspect(page);
+  eq(r.alrTex.filter((x) => x === 'a+b=c').length, 1, 'raw paragraph rendered once after replacement');
   const orphans = await page.evaluate(() =>
-    [...document.querySelectorAll('[data-alr-clone]')].filter((c) => !c.previousElementSibling?.hasAttribute('data-alr-raw-hidden')).length,
+    [...document.querySelectorAll('alr-math[data-alr-src="katex"]')].filter((m) => !m.previousElementSibling?.hasAttribute('data-alr-hidden')).length,
   );
-  eq(orphans, 0, 'orphan clones');
+  eq(orphans, 0, 'orphan MathJax nodes');
+  const dups = await page.evaluate(() => document.querySelectorAll('[data-alr-hidden] + alr-math + alr-math').length);
+  eq(dups, 0, 'duplicate MathJax nodes');
+  assert(r.visibleText.includes('售价 $5 到 $10'), 'currency still intact');
+});
+
+await test('interactive widgets keep working (quiz radio inside <label>)', async () => {
+  const page = await open('quiz');
+  await settle(page, 1500);
   const r = await inspect(page);
-  assert(r.alrTex.includes('a+b=c'), 'raw paragraph re-rendered');
-  const dupClones = await page.evaluate(() => document.querySelectorAll('[data-alr-clone] + [data-alr-clone]').length);
-  eq(dupClones, 0, 'duplicate clones');
+  assert(r.alrTex.includes('k[\\ce{A}]^2'), `option formula rendered: ${JSON.stringify(r.alrTex)}`);
+  // Clicking the rendered option must still reach the page's own control and its handler.
+  const box = await page.evaluate(() => {
+    const m = [...document.querySelectorAll('label alr-math')][0];
+    const b = m.getBoundingClientRect();
+    return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+  });
+  await page.mouse.click(box.x, box.y);
+  await page.waitForTimeout(300);
+  const state = await page.evaluate(() => ({ checked: document.getElementById('r1').getAttribute('aria-checked'), clicks: window.__quizClicks }));
+  eq(state, { checked: 'true', clicks: 1 }, 'quiz control reacted to the click');
+  await page.waitForTimeout(600);
+  eq((await inspect(page)).alr, 2, 'no duplicate after the widget re-rendered its state');
 });
 
 await test('selection copy yields LaTeX; Alt+click copies source', async () => {
@@ -400,9 +440,9 @@ await test('selection copy yields LaTeX; Alt+click copies source', async () => {
   const page = await open('main');
   await settle(page, 1500);
   const sel = await page.evaluate(() => {
-    const clone = [...document.querySelectorAll('[data-alr-clone]')].find((c) => c.textContent.includes('原文公式'));
+    const p = [...document.querySelectorAll('p')].find((c) => c.textContent.includes('原文公式'));
     const range = document.createRange();
-    range.selectNodeContents(clone);
+    range.selectNodeContents(p);
     const s = getSelection();
     s.removeAllRanges();
     s.addRange(range);

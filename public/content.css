@@ -1,9 +1,12 @@
 /* ChatGPT Advanced LaTeX Renderer - styles injected via the manifest (not subject to page CSP). */
 
-/* Page nodes we stand in for: hidden, never removed (React owns them). */
-[data-alr-hidden],
-[data-alr-raw-hidden] {
+/* Page nodes we stand in for (KaTeX formulas, <br> inside a formula): hidden, never removed (React owns them). */
+[data-alr-hidden] {
   display: none !important;
+}
+
+alr-text {
+  display: inline;
 }
 
 alr-math {

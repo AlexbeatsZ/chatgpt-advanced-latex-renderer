@@ -4,7 +4,9 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { assistantTurn, blockMath, codeBlock, inlineMath, list, para, table, text, userTurn } from '../fixtures/chatgpt-page.mjs';
 import { detectFailure, findRenderedUnits, getTexSource, isDisplayUnit, usesPreferred } from '../../src/dom/katex';
 import { authorOf, messageRoots } from '../../src/dom/scope';
-import { collectText, findRawUnits, replaceSegments, scanUnit, unitSignature } from '../../src/dom/rawText';
+import {
+  applyBlock, collectText, findRawBlocks, forgetDetached, isUpToDate, restoreAllBlocks, restoreBlock, scanBlock, stateOf,
+} from '../../src/dom/rawText';
 import { DEFAULT_SCAN, BARRIER } from '../../src/tex/delimiters';
 
 function mount(html: string) {
@@ -63,7 +65,7 @@ describe('rendered formulas (KaTeX)', () => {
   });
 
   it('skips formulas inside our own output and hidden originals', () => {
-    mount(assistantTurn(0, [blockMath('x'), '<alr-math>' + inlineMath('y') + '</alr-math>', `<p data-alr-raw-hidden>${inlineMath('z')}</p>`]));
+    mount(assistantTurn(0, [blockMath('x'), '<alr-math>' + inlineMath('y') + '</alr-math>']));
     expect(findRenderedUnits(document).map(getTexSource)).toEqual(['x']);
   });
 });
@@ -89,80 +91,163 @@ describe('message scope', () => {
   });
 });
 
+
+const texsOf = (root: Element) =>
+  findRawBlocks(root).flatMap((b) => scanBlock(b, DEFAULT_SCAN).segments.map((m) => m.tex));
+
+/** Applies all segments of every raw block with a stub renderer (no MathJax needed here). */
+function applyAll(root: Element) {
+  for (const b of findRawBlocks(root)) {
+    const { map, segments } = scanBlock(b, DEFAULT_SCAN);
+    if (!segments.length) continue;
+    applyBlock(b, map.text, segments, (seg) => {
+      const el = document.createElement('alr-math');
+      el.setAttribute('data-alr-src', 'text');
+      el.setAttribute('data-tex', seg.tex);
+      el.textContent = `[${seg.tex}]`;
+      return el;
+    });
+  }
+}
+
+/** Snapshot of page-owned nodes: identity + data, to prove we never move/replace them. */
+function pageNodes(root: Element) {
+  const out: Node[] = [];
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_ALL);
+  for (let n = w.nextNode(); n; n = w.nextNode()) if (!(n as Element).closest?.('alr-math, alr-text') && !n.parentElement?.closest('alr-math, alr-text')) out.push(n);
+  return out;
+}
+
 describe('raw text scanning', () => {
+  beforeEach(() => restoreAllBlocks());
+
   it('code blocks (CodeMirror), inline code and the composer are never scanned', () => {
     const root = mount(
-      assistantTurn(0, [
-        para(`真公式 $a+b$ 和代码 <code>$z$</code>`),
-        codeBlock('s = "$x^2$"\nt = r"\\(y\\)"'),
-      ]) + '<form><div contenteditable="true">$q$</div></form>',
+      assistantTurn(0, [para(`真公式 $a+b$ 和代码 <code>$z$</code>`), codeBlock('s = "$x^2$"\nt = r"\\(y\\)"')]) +
+        '<form><div contenteditable="true">$q$</div></form>',
     );
-    const units = findRawUnits(root);
-    expect(units).toHaveLength(1);
-    const scans = scanUnit(units[0], DEFAULT_SCAN);
-    expect(scans.flatMap((s) => s.segments.map((m) => m.tex))).toEqual(['a+b']);
+    expect(texsOf(root)).toEqual(['a+b']);
   });
 
   it('inline code acts as a barrier: math cannot span across it', () => {
     const root = mount(assistantTurn(0, [para('$a <code>x</code> b$')]));
-    const [u] = findRawUnits(root);
-    expect(collectText(u).text).toBe(`$a ${BARRIER} b$`);
-    expect(scanUnit(u, DEFAULT_SCAN)).toEqual([]);
+    const [b] = findRawBlocks(root);
+    expect(collectText(b).text).toBe(`$a ${BARRIER} b$`);
+    expect(texsOf(root)).toEqual([]);
   });
 
   it('streaming per-word spans: TeX split across many spans is still found', () => {
     const root = mount(assistantTurn(0, [para(text('Inline \\(E=mc^2\\) and $a+b=c$ and price $5 and $10.'), { streamWords: true })]));
-    const [u] = findRawUnits(root);
-    expect(u.querySelectorAll('[data-d-stream-word]').length).toBeGreaterThan(5);
-    expect(scanUnit(u, DEFAULT_SCAN).flatMap((s) => s.segments.map((m) => m.tex))).toEqual(['E=mc^2', 'a+b=c']);
+    expect(root.querySelectorAll('[data-d-stream-word]').length).toBeGreaterThan(5);
+    expect(texsOf(root)).toEqual(['E=mc^2', 'a+b=c']);
   });
 
   it('currency is untouched, placeholders are untouched', () => {
     const root = mount(assistantTurn(0, [para('售价 $5 到 $10。'), para(text('使用 \\(...\\) 和 \\[...\\]'))]));
-    expect(findRawUnits(root).flatMap((u) => scanUnit(u, DEFAULT_SCAN))).toEqual([]);
+    expect(texsOf(root)).toEqual([]);
   });
 
-  it('nested blocks: the outermost list item is the unit and nested blocks are scanned separately', () => {
+  it('nested blocks are scanned separately (each block excludes its nested blocks)', () => {
     const root = mount(assistantTurn(0, [list([`外层 $x$ <p>段落 $y$</p>${list(['内层 $z$'])}`])]));
-    const units = findRawUnits(root);
-    expect(units).toHaveLength(1);
-    expect(units[0].tagName).toBe('LI');
-    const all = scanUnit(units[0], DEFAULT_SCAN).flatMap((s) => s.segments.map((m) => m.tex)).sort();
-    expect(all).toEqual(['x', 'y', 'z']);
+    expect(texsOf(root).sort()).toEqual(['x', 'y', 'z']);
   });
 
-  it('table cells are separate units', () => {
+  it('table cells: formulas found, currency left alone', () => {
     const root = mount(assistantTurn(0, [table([['$a$', '$b$'], ['c', '$5 and $6']])]));
-    const units = findRawUnits(root);
-    expect(units.map((u) => u.tagName)).toEqual(['TD', 'TD', 'TD']);
-    expect(units.flatMap((u) => scanUnit(u, DEFAULT_SCAN)).flatMap((s) => s.segments.map((m) => m.tex))).toEqual(['a', 'b']);
+    expect(texsOf(root)).toEqual(['a', 'b']);
   });
 
-  it('replaceSegments rewrites a clone across span boundaries and keeps surrounding text', () => {
+  it('quiz options inside <label> (observed on chatgpt.com) are found', () => {
+    const root = mount(
+      assistantTurn(0, [
+        '<div data-d-component="box"><p>题 1：对于反应 \\(\\ce{2A -> B}\\)？</p><div role="radiogroup"><div data-d-component="radio"><label for="r1"><div><button role="radio" id="r1"></button></div>\\(k[\\ce{A}]^2\\)</label></div></div></div>',
+      ]),
+    );
+    expect(texsOf(root)).toEqual(['\\ce{2A -> B}', 'k[\\ce{A}]^2']);
+  });
+});
+
+describe('in-place application (React safety)', () => {
+  beforeEach(() => restoreAllBlocks());
+
+  it('never moves, removes or replaces page nodes, and restores them exactly', () => {
+    const root = mount(
+      assistantTurn(0, [
+        para(text('A \\(x^2\\) B $y$ C'), { streamWords: true }),
+        para(text('one node: $p$ and $q$ end')),
+        para(`mixed <b>bold</b> $r$ ${inlineMath('\\ce{H2O}')} tail $s$`),
+        '<div data-d-component="radio"><label for="r1"><div><button role="radio" id="r1"></button></div>\\(k[\\ce{A}]^2\\)</label></div>',
+      ]),
+    );
+    const before = root.innerHTML;
+    const nodes = pageNodes(root);
+    const parents = nodes.map((n) => n.parentNode);
+    applyAll(root);
+    const shown = root.textContent!.replace(/\s+/g, ' ');
+    expect(shown).toContain('A [x^2] B [y] C');
+    expect(shown).toContain('one node: [p] and [q] end');
+    expect(shown).toContain('[k[\\ce{A}]^2]');
+    expect(shown).toContain('tail [s]');
+    // Same page nodes, same parents (data may be changed, nodes never moved).
+    const after = pageNodes(root);
+    expect(after).toEqual(nodes);
+    after.forEach((n, i) => expect(n.parentNode).toBe(parents[i]));
+    // The interactive control is untouched.
+    expect(root.querySelector('button[role=radio]')!.id).toBe('r1');
+    restoreAllBlocks();
+    expect(root.innerHTML).toBe(before);
+  });
+
+  it('page text as seen by the scanner is unchanged after application (idempotent re-scan)', () => {
     const root = mount(assistantTurn(0, [para(text('A \\(x^2\\) B $y$ C'), { streamWords: true })]));
-    const [u] = findRawUnits(root);
-    const clone = u.cloneNode(true) as Element;
-    for (const s of scanUnit(clone, DEFAULT_SCAN)) {
-      replaceSegments(s.map, s.segments, (seg) => {
-        const el = document.createElement('alr-math');
-        el.setAttribute('data-tex', seg.tex);
-        return el;
-      });
-    }
-    expect([...clone.querySelectorAll('alr-math')].map((e) => e.getAttribute('data-tex'))).toEqual(['x^2', 'y']);
-    expect(clone.textContent!.replace(/\s+/g, ' ').trim()).toBe('A B C');
-    expect(u.textContent).toContain('\\(x^2\\)'); // original untouched
+    const [b] = findRawBlocks(root);
+    const t0 = collectText(b).text;
+    applyAll(root);
+    expect(collectText(b).text).toBe(t0);
+    expect(isUpToDate(b)).toBe(true);
   });
 
-  it('signature is stable across our own KaTeX upgrades but changes with page text', () => {
-    const root = mount(assistantTurn(0, [para(`t $a$ ${inlineMath('\\ce{H2O}')}`)]));
-    const [u] = findRawUnits(root);
-    const before = unitSignature(u);
-    const k = u.querySelector('.katex')!;
-    k.setAttribute('data-alr-hidden', '');
-    k.after(document.createElement('alr-math'));
-    expect(unitSignature(u)).toBe(before);
-    u.appendChild(document.createTextNode(' more'));
-    expect(unitSignature(u)).not.toBe(before);
+  it('when React rewrites a text node we changed, the block is reported stale and React wins on restore', () => {
+    const root = mount(assistantTurn(0, [para(text('X $a$ Y'))]));
+    const [b] = findRawBlocks(root);
+    applyAll(root);
+    const textNode = [...b.childNodes].find((n) => n.nodeType === 3) as Text;
+    textNode.data = 'X $a$ Y and $b$'; // React's update (nodeValue = new text)
+    expect(isUpToDate(b)).toBe(false);
+    restoreBlock(b);
+    expect(b.textContent).toBe('X $a$ Y and $b$');
+    applyAll(root);
+    expect(b.querySelectorAll('alr-math').length).toBe(2);
+  });
+
+  it('when React removes our inserted node container, the block is stale and re-applies cleanly', () => {
+    const root = mount(assistantTurn(0, [para(text('A \\(x\\) B'), { streamWords: true })]));
+    const [b] = findRawBlocks(root);
+    applyAll(root);
+    b.querySelector('alr-math')!.parentElement!.remove(); // React removed a word span
+    expect(isUpToDate(b)).toBe(false);
+    restoreBlock(b);
+    expect(b.querySelectorAll('alr-math, alr-text').length).toBe(0);
+  });
+
+  it('multi-line $$...$$ across <br>: the <br> inside the formula is hidden and restored', () => {
+    const root = mount(assistantTurn(0, [para('前 $$a<br>=b$$ 后')]));
+    const [b] = findRawBlocks(root);
+    expect(scanBlock(b, DEFAULT_SCAN).segments.map((s) => s.tex)).toEqual(['a\n=b']);
+    applyAll(root);
+    expect(b.querySelector('br')!.hasAttribute('data-alr-hidden')).toBe(true);
+    restoreAllBlocks();
+    expect(b.querySelector('br')!.hasAttribute('data-alr-hidden')).toBe(false);
+    expect(b.innerHTML).toBe('前 $$a<br>=b$$ 后');
+  });
+
+  it('detached blocks are forgotten', () => {
+    const root = mount(assistantTurn(0, [para(text('$a$'))]));
+    const [b] = findRawBlocks(root);
+    applyAll(root);
+    expect(stateOf(b)).toBeTruthy();
+    b.remove();
+    forgetDetached();
+    expect(stateOf(b)).toBeUndefined();
   });
 });

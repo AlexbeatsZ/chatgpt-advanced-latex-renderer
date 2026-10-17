@@ -11,7 +11,9 @@ import { preprocessTex } from '../tex/preprocess';
 import type { MathSegment, ScanOptions } from '../tex/delimiters';
 import { detectFailure, findRenderedUnits, getTexSource, isDisplayUnit, usesPreferred, UNIT_SELECTOR } from '../dom/katex';
 import { authorOf, messageRoots } from '../dom/scope';
-import { findRawUnits, replaceSegments, scanUnit, unitSignature, BLOCK_SELECTOR } from '../dom/rawText';
+import {
+  applyBlock, collectText, findRawBlocks, forgetDetached, isUpToDate, restoreAllBlocks, restoreBlock, scanBlock, stateOf, BLOCK_SELECTOR,
+} from '../dom/rawText';
 import { BatchedObserver } from './observer';
 
 type Engine = TexEngine<HTMLElement>;
@@ -19,7 +21,7 @@ type Rendered = { ok: true; node: HTMLElement } | { ok: false; error: string };
 
 const CACHE_LIMIT = 3000;
 const ERROR_LIMIT = 50;
-const ATTRS = ['data-alr-hidden', 'data-alr-raw-hidden', 'data-alr-state', 'data-alr-error', 'data-alr-tex'];
+const ATTRS = ['data-alr-hidden', 'data-alr-state', 'data-alr-error', 'data-alr-tex', 'data-alr-copied'];
 
 export class Controller {
   private settings!: Settings;
@@ -32,7 +34,6 @@ export class Controller {
   private cache = new Map<string, Rendered>();
   /** our node -> the page node it stands in for */
   private links = new WeakMap<Element, Element>();
-  private signatures = new WeakMap<Element, string>();
   private queue = new Set<Element>();
   private draining = false;
   private errors: FormulaError[] = [];
@@ -176,7 +177,7 @@ export class Controller {
     const opts = this.scanOptions();
     for (const root of roots) {
       for (const unit of findRenderedUnits(root)) this.considerKatex(unit);
-      if (this.settings.scanRawText) for (const unit of findRawUnits(root)) this.considerRaw(unit, opts);
+      if (this.settings.scanRawText) for (const block of findRawBlocks(root)) this.considerRaw(block, opts);
     }
     this.lastPassMs = performance.now() - t0;
   }
@@ -201,16 +202,13 @@ export class Controller {
     if (want) this.enqueue(unit, false);
   }
 
-  private considerRaw(unit: Element, opts: ScanOptions) {
-    if (unit.hasAttribute('data-alr-raw-hidden')) {
-      const sig = unitSignature(unit);
-      const clone = unit.nextElementSibling;
-      const intact = clone && clone.hasAttribute('data-alr-clone') && this.links.get(clone) === unit;
-      if (intact && this.signatures.get(unit) === sig) return;
-      this.enqueue(unit, true); // hidden: no layout box, so do not wait for intersection
+  private considerRaw(block: Element, opts: ScanOptions) {
+    if (stateOf(block)) {
+      // Already rendered: redo only if the page changed the text (streaming, React re-render).
+      if (!isUpToDate(block)) this.enqueue(block, true);
       return;
     }
-    if (scanUnit(unit, opts).length) this.enqueue(unit, false);
+    if (scanBlock(block, opts).segments.length) this.enqueue(block, false);
   }
 
   private enqueue(el: Element, immediate: boolean) {
@@ -316,64 +314,35 @@ export class Controller {
     });
   }
 
-  private async processRaw(unit: Element) {
-    const opts = this.scanOptions();
-    const scans = scanUnit(unit, opts);
-    const sig = unitSignature(unit);
-    const results = new Map<string, Rendered>();
-    for (const s of scans) {
-      for (const seg of s.segments) {
-        const key = segKey(seg);
-        if (!results.has(key)) results.set(key, await this.render(seg.tex, seg.display, s.block));
-      }
-    }
-    if (!unit.isConnected || unitSignature(unit) !== sig) return; // still streaming: next batch handles it
-    const oldClone = unit.hasAttribute('data-alr-raw-hidden') ? unit.nextElementSibling : null;
-    const ok = [...results.values()].some((r) => r.ok);
-    if (!ok) {
-      this.observer.mutate(() => {
-        if (oldClone && this.links.get(oldClone) === unit) oldClone.remove();
-        unit.removeAttribute('data-alr-raw-hidden');
-      });
-      for (const s of scans) for (const seg of s.segments) {
-        const r = results.get(segKey(seg));
-        if (r && !r.ok) this.recordError(seg.tex, r.error, 'text');
-      }
-      this.signatures.set(unit, sig);
+  private async processRaw(block: Element) {
+    const { map, segments } = scanBlock(block, this.scanOptions());
+    if (!segments.length) {
+      if (stateOf(block)) this.observer.mutate(() => restoreBlock(block));
       return;
     }
-    const clone = unit.cloneNode(true) as Element;
-    clone.removeAttribute('data-alr-raw-hidden');
-    clone.setAttribute('data-alr-clone', '');
-    clone.removeAttribute('id');
-    clone.querySelectorAll('[id]').forEach((e) => e.removeAttribute('id'));
-    for (const s of scanUnit(clone, opts)) {
-      replaceSegments(s.map, s.segments, (seg) => {
-        const r = results.get(segKey(seg));
-        if (!r) return null;
+    const results = new Map<string, Rendered>();
+    for (const seg of segments) {
+      const key = segKey(seg);
+      if (!results.has(key)) results.set(key, await this.render(seg.tex, seg.display, block));
+    }
+    if (!block.isConnected || collectText(block).text !== map.text) return; // still streaming: next batch handles it
+    for (const seg of segments) {
+      const r = results.get(segKey(seg))!;
+      if (!r.ok) this.recordError(seg.tex, r.error, 'text');
+    }
+    this.observer.mutate(() =>
+      applyBlock(block, map.text, segments, (seg) => {
+        const r = results.get(segKey(seg))!;
         if (r.ok) return this.makeMath(r.node.cloneNode(true) as HTMLElement, seg.tex, seg.display, 'text');
-        this.recordError(seg.tex, r.error, 'text');
-        const span = document.createElement('span');
+        // Keep the source visible, marked, with the error on hover. <alr-text> is ours, so it
+        // is skipped by text collection and removed on restore.
+        const span = document.createElement('alr-text');
         span.className = 'alr-raw-error';
         span.title = `LaTeX 错误: ${r.error}`;
-        span.textContent = s.map.text.slice(seg.start, seg.end);
+        span.textContent = map.text.slice(seg.start, seg.end);
         return span;
-      });
-    }
-    // The clone holds copies of formulas that were upgraded in the original; re-link them.
-    clone.querySelectorAll('alr-math').forEach((m) => {
-      const prev = m.previousElementSibling;
-      if (prev?.hasAttribute('data-alr-hidden')) this.links.set(m, prev);
-    });
-    this.observer.mutate(() => {
-      if (oldClone && this.links.get(oldClone) === unit) oldClone.remove();
-      unit.after(clone);
-      unit.setAttribute('data-alr-raw-hidden', '');
-    });
-    this.links.set(clone, unit);
-    this.signatures.set(unit, sig);
-    // KaTeX inside the new clone may need upgrading too (it is visible now).
-    for (const k of findRenderedUnits(clone)) this.considerKatex(k);
+      }),
+    );
   }
 
   private recordError(tex: string, message: string, source: 'katex' | 'text') {
@@ -384,11 +353,11 @@ export class Controller {
 
   /* ------------------------------------------------------------ cleanup */
 
-  /** Removes our nodes whose page counterpart disappeared or moved (React re-render). */
+  /** Removes MathJax nodes whose KaTeX counterpart disappeared or moved (React re-render). */
   private gc() {
+    forgetDetached();
     const orphans: Element[] = [];
-    document.querySelectorAll('alr-math, [data-alr-clone]').forEach((el) => {
-      if (el.parentElement?.closest('[data-alr-clone]')) return; // inside a clone: removed with it
+    document.querySelectorAll('alr-math[data-alr-src="katex"]').forEach((el) => {
       const orig = this.links.get(el);
       if (!orig || !orig.isConnected || orig.nextElementSibling !== el) orphans.push(el);
     });
@@ -397,7 +366,8 @@ export class Controller {
 
   restoreAll() {
     this.observer.mutate(() => {
-      document.querySelectorAll('[data-alr-clone], alr-math').forEach((el) => el.remove());
+      restoreAllBlocks();
+      document.querySelectorAll('alr-math, alr-text').forEach((el) => el.remove());
       document.querySelectorAll(ATTRS.map((a) => `[${a}]`).join(',')).forEach((el) => ATTRS.forEach((a) => el.removeAttribute(a)));
     });
     this.io?.disconnect();

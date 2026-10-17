@@ -1,0 +1,10 @@
+export function inlineMath(tex: string): string;
+export function blockMath(tex: string): string;
+export function para(html: string, opts?: { streamWords?: boolean }): string;
+export function text(s: string): string;
+export function codeBlock(code: string, lang?: string): string;
+export function list(items: string[]): string;
+export function table(rows: string[][]): string;
+export function assistantTurn(n: number, blocks: string[]): string;
+export function userTurn(n: number, plain: string): string;
+export function page(turns: string[], opts?: { dark?: boolean }): string;

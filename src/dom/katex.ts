@@ -4,10 +4,8 @@
  */
 import { commandsIn } from '../tex/braces';
 
-/** Our rendered formulas and our clones of raw-text blocks. */
-export const OWN_SELECTOR = 'alr-math, [data-alr-clone]';
-/** Formulas inside these are not processed (ours, or a hidden original whose clone is shown). */
-const SKIP_UNITS = 'alr-math, [data-alr-raw-hidden]';
+/** Nodes created by this extension. */
+export const OWN_SELECTOR = 'alr-math, alr-text';
 
 export const UNIT_SELECTOR = '.katex-display, .katex, .katex-error, mjx-container';
 
@@ -18,7 +16,7 @@ export const UNIT_SELECTOR = '.katex-display, .katex, .katex-error, mjx-containe
 export function findRenderedUnits(root: ParentNode): Element[] {
   const out: Element[] = [];
   root.querySelectorAll(UNIT_SELECTOR).forEach((el) => {
-    if (el.closest(SKIP_UNITS)) return;
+    if (el.closest(OWN_SELECTOR)) return;
     if ((el.matches('.katex') || el.matches('.katex-error')) && el.parentElement?.closest('.katex-display')) return;
     if (el.matches('mjx-container') && el.parentElement?.closest('mjx-container')) return;
     if (el.parentElement?.closest('.katex')) return; // nested inside another formula

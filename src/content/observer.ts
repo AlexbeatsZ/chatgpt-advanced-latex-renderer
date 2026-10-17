@@ -8,7 +8,7 @@ const OWN_ATTR = /^data-alr-/;
 function isOwnNode(n: Node): boolean {
   if (n.nodeType !== 1) return false;
   const el = n as Element;
-  return el.tagName === 'ALR-MATH' || el.hasAttribute('data-alr-clone') || el.id === 'alr-mathjax-style';
+  return el.tagName === 'ALR-MATH' || el.tagName === 'ALR-TEXT' || el.id === 'alr-mathjax-style';
 }
 
 /** Nodes MathJax may append temporarily (e.g. to measure text) are not page changes. */
@@ -72,11 +72,11 @@ export class BatchedObserver {
       if (r.type === 'attributes' && r.attributeName && OWN_ATTR.test(r.attributeName)) continue;
       const target = r.target.nodeType === 1 ? (r.target as Element) : r.target.parentElement;
       if (!target || !target.isConnected) continue;
-      if (target.closest('alr-math, [data-alr-clone]')) continue;
+      if (target.closest('alr-math, alr-text')) continue;
       if (r.type === 'childList') {
         const nodes = [...Array.from(r.addedNodes), ...Array.from(r.removedNodes)];
         if (nodes.length && nodes.every((n) => isOwnNode(n) || (target === document.body && isTransient(n)))) continue;
-        if (nodes.length && nodes.every((n) => n.nodeType === 3 && !(n as Text).data.trim()) && !target.closest('[data-alr-raw-hidden]')) continue;
+        if (nodes.length && nodes.every((n) => n.nodeType === 3 && !(n as Text).data.trim())) continue;
       }
       this.pending.add(target);
     }
