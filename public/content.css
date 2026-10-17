@@ -1,0 +1,74 @@
+/* ChatGPT Advanced LaTeX Renderer - styles injected via the manifest (not subject to page CSP). */
+
+/* Page nodes we stand in for: hidden, never removed (React owns them). */
+[data-alr-hidden],
+[data-alr-raw-hidden] {
+  display: none !important;
+}
+
+alr-math {
+  color: inherit;
+  line-height: normal;
+}
+
+alr-math[data-alr-display='inline'] {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+
+alr-math[data-alr-display='block'] {
+  display: block;
+  margin: 1em 0;
+  padding: 0.15em 0;
+  text-align: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+}
+
+alr-math mjx-container[jax='SVG'] {
+  user-select: none;
+}
+
+alr-math mjx-container[jax='SVG'][display='true'] {
+  margin: 0 !important;
+}
+
+/* Wide display equations scroll horizontally instead of overflowing the message. */
+alr-math[data-alr-display='block'] mjx-container[jax='SVG'] {
+  display: inline-block !important;
+  min-width: min-content;
+}
+
+/* Invisible but selectable: copying a selection that spans formulas yields their LaTeX. */
+alr-math .alr-copy {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: pre;
+}
+
+alr-math[data-alr-copied],
+.katex[data-alr-copied],
+.katex-display[data-alr-copied] {
+  outline: 2px solid rgba(16, 163, 127, 0.6);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* MathJax could not render this one: the page's own rendering is kept and marked. */
+[data-alr-state='error'] {
+  outline: 1px dashed rgba(217, 119, 6, 0.6);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.alr-raw-error {
+  text-decoration: underline wavy rgba(217, 119, 6, 0.8);
+  text-underline-offset: 3px;
+  cursor: help;
+}

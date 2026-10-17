@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Advanced LaTeX Renderer</title>
+    <link rel="stylesheet" href="/src/popup/popup.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Advanced LaTeX</h1>
+      <label class="switch" title="启用 / 关闭（关闭后恢复原网页显示）">
+        <input type="checkbox" id="enabled" />
+        <span></span>
+      </label>
+    </header>
+
+    <section class="row">
+      <div class="seg" role="radiogroup" aria-label="渲染模式">
+        <label><input type="radio" name="mode" value="compat" /><span>兼容增强</span></label>
+        <label><input type="radio" name="mode" value="full" /><span>完整 MathJax</span></label>
+      </div>
+      <button id="rerender" type="button" title="清除并重新渲染当前页面">重新渲染</button>
+    </section>
+    <p class="hint" id="mode-hint"></p>
+
+    <section class="status" id="status">
+      <div class="status-line"><span class="dot" id="engine-dot"></span><span id="engine-text">正在连接页面…</span></div>
+      <dl class="counts" id="counts"></dl>
+      <details id="errors-box" hidden>
+        <summary>渲染错误 <span id="error-count"></span></summary>
+        <ul id="errors"></ul>
+      </details>
+    </section>
+
+    <section class="row">
+      <label for="scale">公式大小</label>
+      <input type="range" id="scale" min="70" max="200" step="5" />
+      <output id="scale-out"></output>
+    </section>
+
+    <details class="block">
+      <summary>自定义宏</summary>
+      <textarea id="macros" spellcheck="false" rows="8"></textarea>
+      <div class="row">
+        <button id="save-macros" type="button">保存并检查</button>
+        <span id="macro-msg" class="msg"></span>
+      </div>
+      <label class="field">兼容模式下强制用 MathJax 的命令
+        <input id="prefer" type="text" placeholder="ce, pu" spellcheck="false" />
+      </label>
+    </details>
+
+    <details class="block">
+      <summary>高级选项</summary>
+      <label class="check"><input type="checkbox" id="scanRawText" /> 渲染页面未渲染的原始 LaTeX 文本</label>
+      <label class="check"><input type="checkbox" id="singleDollar" /> 识别单美元 <code>$…$</code>（货币金额自动排除）</label>
+      <label class="check"><input type="checkbox" id="userMessages" /> 同时处理我发送的消息</label>
+      <label class="check"><input type="checkbox" id="smartBraket" /> <code>\braket{a|b}</code> 按 braket 宏包语义处理</label>
+      <label class="check"><input type="checkbox" id="siunitx" /> siunitx 子集（<code>\qty{25}{kJ.mol^-1}</code>、<code>\SI</code>、<code>\si</code>）</label>
+      <label class="check"><input type="checkbox" id="physicsOverridesStandard" /> physics 覆盖标准命令（<code>\div</code>=散度，<code>\Re</code>/<code>\Im</code>=算符）</label>
+      <label class="check"><input type="checkbox" id="altClickCopy" /> Alt+单击公式复制 LaTeX 源码</label>
+    </details>
+
+    <footer>本地渲染 · 不上传任何聊天内容 · MathJax <span id="mj-version">4</span></footer>
+    <script type="module" src="/src/popup/popup.ts"></script>
+  </body>
+</html>
