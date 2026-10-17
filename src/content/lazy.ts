@@ -38,23 +38,27 @@ export class LazyQueue {
     this.rootCache = new WeakMap();
   }
 
-  /** Nearest scrollable ancestor (memoized along the chain), or null for the viewport. */
+  /**
+   * Nearest ancestor that really scrolls vertically, or null for the viewport. Elements that are
+   * merely `overflow:auto` (ChatGPT's display-math boxes, for horizontal scrolling) don't count.
+   * Only positive results are memoized: a short thread's container may start scrolling later.
+   */
   private scrollRootOf(el: Element): Element | null {
     const chain: Element[] = [];
     let found: Element | null = null;
     for (let e = el.parentElement; e && e !== document.body && e !== document.documentElement; e = e.parentElement) {
       const cached = this.rootCache.get(e);
-      if (cached !== undefined) {
+      if (cached) {
         found = cached;
         break;
       }
       chain.push(e);
-      if (OVERFLOWS.has(getComputedStyle(e).overflowY)) {
+      if (e.scrollHeight > e.clientHeight + 1 && OVERFLOWS.has(getComputedStyle(e).overflowY)) {
         found = e;
         break;
       }
     }
-    for (const c of chain) this.rootCache.set(c, found);
+    if (found) for (const c of chain) this.rootCache.set(c, found);
     return found;
   }
 }
