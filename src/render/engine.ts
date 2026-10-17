@@ -105,9 +105,9 @@ export class TexEngine<N = unknown> {
     if (!handlerRegistered) {
       RegisterHTMLHandler(adaptor);
       MathJaxNewcmFont.addExtension(MathJaxMhchemFontExtension as any);
-      installLoader(loadFont);
       handlerRegistered = true;
     }
+    installLoader(loadFont); // mathjax.asyncLoad is global: the latest engine's loader is used
     const macros = { ...(cfg.physicsOverridesStandard ? {} : STANDARD_RESTORE), ...cfg.macros };
     this.tex = new TeX({
       packages: TEX_PACKAGES,

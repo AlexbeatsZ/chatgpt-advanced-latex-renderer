@@ -42,6 +42,12 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
 
+      - name: Build userscript
+        run: pnpm build:userscript
+      - name: Font data served from this tag matches the hashes compiled into the userscript
+        run: git diff --exit-code -- userscript/fonts src/userscript/fontManifest.ts
+      - run: pnpm test:userscript
+
       - name: Package
         id: pack
         run: |
@@ -55,7 +61,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           name="${{ steps.pack.outputs.name }}"
+          us=dist-userscript/chatgpt-advanced-latex-renderer
+          (cd dist-userscript && sha256sum chatgpt-advanced-latex-renderer.user.js > chatgpt-advanced-latex-renderer.user.js.sha256)
           gh release create "$GITHUB_REF_NAME" "${name}.zip" "${name}.zip.sha256" \
+            "${us}.user.js" "${us}.meta.js" "${us}.user.js.sha256" \
             --title "$GITHUB_REF_NAME" \
             --generate-notes \
-            --notes "安装：下载 ${name}.zip 并解压，在 chrome://extensions（或 edge://extensions）开启开发者模式，点“加载已解压的扩展程序”选择解压后的文件夹。该 zip 也可直接上传到 Chrome Web Store / Edge Add-ons。"
+            --notes "扩展：下载 ${name}.zip 并解压，在 chrome://extensions（或 edge://extensions）开启开发者模式，点“加载已解压的扩展程序”选择解压后的文件夹。该 zip 也可直接上传到 Chrome Web Store / Edge Add-ons。
+
+          油猴脚本：已安装 Tampermonkey / Violentmonkey 时，点击 chatgpt-advanced-latex-renderer.user.js 即可安装（之后自动更新）。字体数据按需从 jsDelivr / GitHub 下载并用脚本内置的 SHA-256 校验。"

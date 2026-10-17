@@ -1,2 +1,5 @@
 * text=auto eol=lf
 *.png binary
+userscript/fonts/*.json -diff -text linguist-generated
+src/userscript/fontManifest.ts linguist-generated
+src/render/fontLoaders.ts linguist-generated

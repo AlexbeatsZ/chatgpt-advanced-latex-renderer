@@ -62,13 +62,27 @@ export function parseCommandList(s: string): string[] {
     .filter((x) => /^[a-zA-Z]+$/.test(x));
 }
 
-export async function loadSettings(): Promise<Settings> {
-  const got = await chrome.storage.local.get(STORAGE_KEY);
-  return normalizeSettings(got[STORAGE_KEY]);
+/** Where settings live: chrome.storage.local (extension) or Tampermonkey storage (userscript). */
+export interface SettingsStore {
+  load(): Promise<Settings>;
+  save(patch: Partial<Settings>): Promise<Settings>;
+  /** Called with the new settings when they change elsewhere (popup, another tab). */
+  onChange(cb: (s: Settings) => void): void;
 }
 
-export async function saveSettings(patch: Partial<Settings>): Promise<Settings> {
-  const next = normalizeSettings({ ...(await loadSettings()), ...patch });
-  await chrome.storage.local.set({ [STORAGE_KEY]: next });
-  return next;
-}
+export const extensionStore: SettingsStore = {
+  async load() {
+    const got = await chrome.storage.local.get(STORAGE_KEY);
+    return normalizeSettings(got[STORAGE_KEY]);
+  },
+  async save(patch) {
+    const next = normalizeSettings({ ...(await extensionStore.load()), ...patch });
+    await chrome.storage.local.set({ [STORAGE_KEY]: next });
+    return next;
+  },
+  onChange(cb) {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && changes[STORAGE_KEY]) cb(normalizeSettings(changes[STORAGE_KEY].newValue));
+    });
+  },
+};

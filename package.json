@@ -1,6 +1,6 @@
 {
   "name": "chatgpt-advanced-latex-renderer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MV3 extension: MathJax 4 enhanced LaTeX rendering (mhchem, physics) for ChatGPT",
   "scripts": {
     "gen:fonts": "node scripts/gen-font-loaders.mjs",
@@ -8,7 +8,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "node tests/e2e/run-e2e.mjs",
-    "probe": "node scripts/probe-chatgpt.mjs"
+    "probe": "node scripts/probe-chatgpt.mjs",
+    "build:userscript": "node scripts/build-userscript.mjs",
+    "test:userscript": "node tests/e2e/run-userscript-e2e.mjs"
   },
   "keywords": [],
   "author": "",

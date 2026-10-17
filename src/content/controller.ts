@@ -3,7 +3,7 @@
  * Read docs/design/chatgpt-dom.md before changing how the DOM is modified.
  */
 import type { TexEngine } from '../render/engine';
-import type * as BrowserEngine from '../render/browserEngine';
+import type { EngineFactory } from '../render/domEngine';
 import { type Settings, parseCommandList } from '../shared/settings';
 import type { FormulaError, Status } from '../shared/messages';
 import { parseMacros } from '../tex/macros';
@@ -50,6 +50,9 @@ export class Controller {
   private urlTimer: ReturnType<typeof setInterval> | null = null;
   private lastUrl = location.href;
   private active = false;
+
+  /** @param loadEngine resolves to a factory for the MathJax engine (loaded lazily, platform-specific) */
+  constructor(private readonly loadEngine: () => Promise<EngineFactory>) {}
 
   async init(settings: Settings) {
     this.settings = settings;
@@ -113,9 +116,9 @@ export class Controller {
     if (!this.engine) {
       this.engineState = 'loading';
       const cfg = { macros: parseMacros(this.settings.macrosText).macros, physicsOverridesStandard: this.settings.physicsOverridesStandard };
-      this.engine = loadEngineModule()
-        .then((m) => {
-          const engine = m.createBrowserEngine(cfg);
+      this.engine = this.loadEngine()
+        .then((create) => {
+          const engine = create(cfg);
           this.installStyles(engine);
           this.engineState = 'ready';
           this.engineError = undefined;
@@ -460,8 +463,8 @@ export class Controller {
   async validateMacros(text: string): Promise<string[]> {
     const parsed = parseMacros(text);
     if (parsed.errors.length) return parsed.errors;
-    const { createBrowserEngine } = await loadEngineModule();
-    const engine = createBrowserEngine({ macros: parsed.macros, physicsOverridesStandard: this.settings.physicsOverridesStandard });
+    const create = await this.loadEngine();
+    const engine = create({ macros: parsed.macros, physicsOverridesStandard: this.settings.physicsOverridesStandard });
     return engine.validateMacros(Object.keys(parsed.macros));
   }
 }
@@ -485,11 +488,6 @@ function debug(...args: unknown[]) {
   } catch {
     /* storage blocked */
   }
-}
-
-/** MathJax lives in its own entry (dist/content/engine.js), loaded only when first needed. */
-function loadEngineModule(): Promise<typeof BrowserEngine> {
-  return import(/* @vite-ignore */ chrome.runtime.getURL('content/engine.js'));
 }
 
 function segKey(seg: MathSegment): string {

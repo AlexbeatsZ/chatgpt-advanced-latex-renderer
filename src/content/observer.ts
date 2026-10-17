@@ -8,7 +8,7 @@ const OWN_ATTR = /^data-alr-/;
 function isOwnNode(n: Node): boolean {
   if (n.nodeType !== 1) return false;
   const el = n as Element;
-  return el.tagName === 'ALR-MATH' || el.tagName === 'ALR-TEXT' || el.id === 'alr-mathjax-style';
+  return el.tagName === 'ALR-MATH' || el.tagName === 'ALR-TEXT' || el.tagName === 'ALR-PANEL-HOST' || el.id === 'alr-mathjax-style';
 }
 
 /** Nodes MathJax may append temporarily (e.g. to measure text) are not page changes. */

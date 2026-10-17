@@ -1,6 +1,8 @@
 # Third-party notices
 
-The built extension (`dist/`) bundles the following software. All of it is used unmodified.
+The built extension (`dist/`) and userscript (`dist-userscript/`) bundle the following software.
+The userscript additionally serves SVG glyph data as JSON in `userscript/fonts/`, generated from
+the font package without changing the glyph paths. The upstream engine sources are not modified.
 
 | Package | Version | License | Use |
 |---|---|---|---|

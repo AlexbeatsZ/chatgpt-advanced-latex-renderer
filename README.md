@@ -30,6 +30,19 @@ ChatGPT 自带的 KaTeX 不认识 `\ce` 等命令：要么把命令名显示成�
 更新代码后重新 `pnpm build`，然后在扩展页点该扩展的“重新加载”并刷新 ChatGPT 页面（`manifest.json` 与
 `content.css` 只在重新加载扩展时更新）。最低版本 Chrome / Edge 120。
 
+## 油猴脚本版本
+
+适合不方便安装扩展的场景（功能与扩展相同，同一套代码）：
+
+1. 安装 [Tampermonkey](https://www.tampermonkey.net/) 或 Violentmonkey。Chrome 138+ 的 Tampermonkey 需要在其扩展详情页打开“允许用户脚本”。
+2. 打开 [chatgpt-advanced-latex-renderer.user.js](https://github.com/AlexbeatsZ/chatgpt-advanced-latex-renderer/releases/latest/download/chatgpt-advanced-latex-renderer.user.js) 并点“安装”。之后会自动检查更新。
+3. 设置：在 ChatGPT 页面点油猴图标 → “⚙ Advanced LaTeX 设置”（页内面板，和扩展弹出界面相同）。
+
+与扩展的区别：脚本（约 1.9 MB，未压缩、可审阅）内置 MathJax 和基础字体；遇到基础字体之外的字形（如
+`\mathfrak`、`\mathscr`、西里尔字母）时，按需从 jsDelivr（失败则 GitHub raw）下载对应字形区段的**纯数据 JSON**，
+用脚本内置的 SHA-256 校验后才使用并缓存到本地，下载的内容不会被执行。扩展和脚本同时装上时只有先启动的一个生效。
+设计说明见 [docs/design/userscript.md](docs/design/userscript.md)。
+
 ## 功能
 
 | 功能 | 说明 |
@@ -96,7 +109,9 @@ src/dom/rawText.ts         原文公式：文本收集、原位替换与精确�
 src/dom/scope.ts           消息范围与排除区域（不依赖哈希类名）
 src/tex/*.ts               定界符扫描、宏解析、冲突预处理、代码块切分（纯函数）
 src/render/engine.ts       MathJax 4（TeX → SVG），浏览器/Node 通用
-src/popup/*                弹出界面
+src/ui/panel.ts            设置/状态面板（扩展弹出页与脚本页内面板共用）
+src/popup/*                扩展弹出页（面板 + chrome.tabs 消息）
+src/userscript/*           油猴脚本入口、GM 存储、字形 JSON 加载与校验
 ```
 
 设计细节与真实页面观察记录：[docs/design/chatgpt-dom.md](docs/design/chatgpt-dom.md)、[docs/design/mathjax-engine.md](docs/design/mathjax-engine.md)。
@@ -113,16 +128,23 @@ pnpm test
 ```bash
 pnpm build && pnpm test:e2e
 ```
+```bash
+pnpm build:userscript && pnpm test:userscript
+```
 
-- 单元测试（Vitest，148 个）：定界符/货币/转义/嵌套括号/未闭合；宏解析；冲突改写；真实 MathJax 编译全部
-  夹具公式（含 15+ 条取自真实对话的公式），并断言无缺字形；jsdom 上的提取、原位替换与还原、代码块预览。
+- 单元测试（Vitest，230 个）：定界符/货币/转义/嵌套括号/未闭合；宏解析；冲突改写；真实 MathJax 编译全部
+  夹具公式（含 20 条取自真实对话的公式），并断言无缺字形；jsdom 上的提取、原位替换与还原、代码块预览；
+  油猴脚本的字形 JSON 路径（全部公式重新渲染、篡改拒绝、镜像回退、缓存）。
+- 油猴脚本端到端（7 个）：真实 Chromium 中注入构建出的 `.user.js`（GM_* 垫片代替 Tampermonkey），字体主机请求被拦截：
+  渲染结果、缓存后离线、jsDelivr 故障回退、篡改数据被拒绝、页内面板与开关、与扩展共存、无多余请求。
 - 端到端（Playwright + 真实 Chromium + 构建产物，15 个）：在 `https://chatgpt.com/` 域名下用**模拟页面**
   （按真实结构复刻，KaTeX 由真实 KaTeX 生成）测试注入、两种模式、关闭恢复、刷新后状态、深色模式、
   基线与字号、流式、React 式重渲染、题目单选交互、选择复制、Alt+单击、长对话性能、内部滚动容器预渲染、无外部请求。
 
-CI（GitHub Actions，Ubuntu）在每次推送到 `main` 时运行类型检查、单元测试、构建与端到端测试，并上传未打包扩展
-与截图。发布：把 `public/manifest.json` 与 `package.json` 的版本改为同一值，提交后推送标签 `vX.Y.Z`，
-Release 工作流会校验版本、重跑全部测试、打包 zip（附 SHA-256）并创建 GitHub Release。
+CI（GitHub Actions，Ubuntu）在每次推送到 `main` 时运行类型检查、单元测试、构建、扩展与脚本的端到端测试，
+并确认提交的字形 JSON 与重新生成的一致，上传未打包扩展、脚本与截图。发布：把 `public/manifest.json` 与
+`package.json` 的版本改为同一值，提交后推送标签 `vX.Y.Z`，Release 工作流会校验版本、重跑全部测试，
+上传扩展 zip、`.user.js`、`.meta.js`（附 SHA-256）并创建 GitHub Release。脚本的字形 URL 固定到该标签。
 
 ## 验证状态
 
@@ -132,6 +154,8 @@ Release 工作流会校验版本、重跑全部测试、打包 zip（附 SHA-256
 | 真实页面渲染（已加载扩展的 Chrome） | ✅ 历史对话：屏幕内及下方 900 px 内无待渲染公式、0 错误、0 缺字形；✅ 一次真实流式回答：```latex 预览失败被替换为 5 行公式，10 个 KaTeX 中需要的 7 个升级、无可见红字，`$E=h\nu$` 渲染，货币与 Python 代码不变，无页面 JS 错误 |
 | 代码块多行公式“每行一个”的最终外观 | ⚠️ 修复（内联样式）后只在模拟页验证；真实页需重新加载扩展后再看一次 |
 | Edge | ⚠️ 未实测（同为 Chromium MV3，预期可用） |
+| macOS（Apple Silicon，Chrome） | ✅ 在 Mac 上 clone、构建、单元测试通过；⚠️ 加载到 Mac Chrome 需手动一步 |
+| 油猴脚本在真实 Tampermonkey + 真实 chatgpt.com | ⚠️ 未验证（逻辑与扩展共用，已在 GM 垫片 + 模拟页上测试） |
 | 消息编辑、分支切换、分享页、移动端 | ⚠️ 未在真实页面专门测试（逻辑上不触碰页面节点） |
 | 浅色模式真实页面 | ⚠️ 只在模拟页验证（SVG 使用 currentColor） |
 
