@@ -88,7 +88,8 @@ export function scanUnit(unit: Element, opts: ScanOptions): BlockScan[] {
   const blocks = [unit, ...Array.from(unit.querySelectorAll(BLOCK_SELECTOR))];
   for (const block of blocks) {
     const excluded = block === unit ? null : block.parentElement?.closest(EXCLUDED_SELECTOR);
-    if (excluded && unit.contains(excluded)) continue; // e.g. a <p> inside a code widget
+    // e.g. a <p> inside a code widget. The unit itself may match (our clone root) - that's fine.
+    if (excluded && excluded !== unit && unit.contains(excluded)) continue;
     const map = collectText(block);
     if (!mayContainMath(map.text)) continue;
     const segments = findMath(map.text, opts);

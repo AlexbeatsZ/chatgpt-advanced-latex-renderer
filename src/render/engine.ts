@@ -46,14 +46,16 @@ import { MathJaxMhchemFontExtension } from '@mathjax/mathjax-mhchem-font-extensi
 import type { MacroMap } from '../tex/macros';
 
 /**
- * Package order matters: later packages override earlier ones for the same command.
- * braket comes before physics so physics owns \bra \ket \braket (braket-style bars are
- * rewritten by preprocessTex). Deliberately NOT loaded: html/texhtml (raw HTML, links),
+ * When two packages define the same command, the one with the higher priority (lower number,
+ * default 5) wins. braket ships with priority 3, which would beat physics for \bra \ket \braket,
+ * so it is loaded with priority 10: physics owns those commands (braket-style \braket{a|b} is
+ * rewritten by preprocessTex) and braket still provides \set \Set \Bra \Ket \Braket.
+ * Deliberately NOT loaded: html/texhtml (raw HTML, links),
  * noerrors/noundefined (we need real errors to fall back to the page's rendering),
  * require/autoload (runtime loading).
  */
-export const TEX_PACKAGES = [
-  'base', 'ams', 'amscd', 'newcommand', 'boldsymbol', 'mhchem', 'braket', 'physics',
+export const TEX_PACKAGES: (string | [string, number])[] = [
+  'base', 'ams', 'amscd', 'newcommand', 'boldsymbol', 'mhchem', ['braket', 10], 'physics',
   'mathtools', 'empheq', 'cancel', 'cases', 'centernot', 'color', 'colortbl', 'bbox', 'enclose',
   'extpfeil', 'gensymb', 'textcomp', 'textmacros', 'unicode', 'units', 'upgreek', 'bbm', 'dsfont',
   'verb', 'begingroup', 'configmacros',

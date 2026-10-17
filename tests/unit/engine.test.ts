@@ -84,10 +84,24 @@ describe('engine semantics', () => {
     await svgOf('x \\label{eq:a} \\tag{1}', true);
   });
 
-  it('braket-style \\braket{a|b} renders like physics \\braket{a}{b}', async () => {
-    const a = await svgOf('\\braket{\\psi|\\phi}');
-    const b = await svgOf('\\braket{\\psi}{\\phi}');
+  // Vertical bars in the output distinguish physics (<a|b>) from braket-package / wrong results.
+  const bars = (svg: string) => (svg.match(/data-c="(7C|2223|2758)"/g) ?? []).length;
+
+  it('physics owns \\bra \\ket \\braket (contraction, two-argument form)', async () => {
+    expect(bars(await svgOf('\\bra{\\psi}\\ket{\\phi}'))).toBe(1); // the braket package would give ||
+    const two = await svgOf('\\braket{\\psi}{\\phi}');
+    expect(bars(two)).toBe(1);
+    expect(two).toContain('data-c="27E8"');
+    expect(two).toContain('data-c="27E9"');
+  });
+
+  it('braket-style \\braket{a|b} / \\braket{a|H|b} are rewritten to the physics equivalents', async () => {
     const strip = (s: string) => s.replace(/data-latex="[^"]*"/g, '');
-    expect(strip(a)).toBe(strip(b));
+    expect(strip(await svgOf('\\braket{\\psi|\\phi}'))).toBe(strip(await svgOf('\\braket{\\psi}{\\phi}')));
+    expect(bars(await svgOf('\\braket{m|\\hat H|n}'))).toBe(2);
+  });
+
+  it('braket package extras remain available', async () => {
+    expect(await svgOf('\\Braket{\\phi|\\psi} \\set{x|x>0}')).toContain('<svg');
   });
 });

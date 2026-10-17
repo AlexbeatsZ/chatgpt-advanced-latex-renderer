@@ -29,7 +29,8 @@ export const DEFAULT_SETTINGS: Settings = {
   mode: 'compat',
   scale: 100,
   macrosText: DEFAULT_MACROS_TEXT,
-  preferCommands: 'ce, pu',
+  // KaTeX lacks mhchem; \bra \ket \braket exist in KaTeX but with braket-package semantics.
+  preferCommands: 'ce, pu, bra, ket, braket',
   scanRawText: true,
   singleDollar: true,
   userMessages: false,

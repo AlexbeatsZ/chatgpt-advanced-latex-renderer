@@ -9,7 +9,7 @@ import type { FormulaError, Status } from '../shared/messages';
 import { parseMacros } from '../tex/macros';
 import { preprocessTex } from '../tex/preprocess';
 import type { MathSegment, ScanOptions } from '../tex/delimiters';
-import { detectFailure, findRenderedUnits, getTexSource, isDisplayUnit, usesPreferred } from '../dom/katex';
+import { detectFailure, findRenderedUnits, getTexSource, isDisplayUnit, usesPreferred, UNIT_SELECTOR } from '../dom/katex';
 import { authorOf, messageRoots } from '../dom/scope';
 import { findRawUnits, replaceSegments, scanUnit, unitSignature, BLOCK_SELECTOR } from '../dom/rawText';
 import { BatchedObserver } from './observer';
@@ -241,7 +241,7 @@ export class Controller {
         this.queue.delete(el);
         if (!el.isConnected) continue;
         try {
-          if (el.matches('.katex, .katex-display, mjx-container')) await this.processKatex(el);
+          if (el.matches(UNIT_SELECTOR)) await this.processKatex(el);
           else await this.processRaw(el);
         } catch (e) {
           console.warn('[ALR] processing failed', e);
@@ -411,7 +411,7 @@ export class Controller {
     if (!e.altKey || !this.settings.altClickCopy || !this.settings.enabled) return;
     const target = e.target as Element | null;
     const ours = target?.closest?.('alr-math');
-    const native = ours ? null : target?.closest?.('.katex-display, .katex');
+    const native = ours ? null : target?.closest?.('.katex-display, .katex, .katex-error');
     const tex = ours?.getAttribute('data-alr-tex') ?? (native ? getTexSource(native) : null);
     if (!tex) return;
     e.preventDefault();

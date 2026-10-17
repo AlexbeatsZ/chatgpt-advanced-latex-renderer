@@ -24,7 +24,7 @@ export const MESSAGE_SELECTOR = [...ASSISTANT_SELECTORS, ...USER_SELECTORS].join
 export const EXCLUDED_SELECTOR = [
   'pre', 'code', 'kbd', 'samp', 'textarea', 'input', 'select', 'button', 'script', 'style', 'svg',
   '.cm-editor', '[contenteditable=""]', '[contenteditable="true"]', '[contenteditable="plaintext-only"]',
-  '.katex', '.katex-display', 'mjx-container', 'math', OWN_SELECTOR, '[data-alr-skip]',
+  '.katex', '.katex-display', '.katex-error', 'mjx-container', 'math', OWN_SELECTOR, '[data-alr-skip]',
 ].join(',');
 
 export function authorOf(el: Element): Author {

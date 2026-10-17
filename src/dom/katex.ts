@@ -9,12 +9,17 @@ export const OWN_SELECTOR = 'alr-math, [data-alr-clone]';
 /** Formulas inside these are not processed (ours, or a hidden original whose clone is shown). */
 const SKIP_UNITS = 'alr-math, [data-alr-raw-hidden]';
 
-/** The outermost element of one rendered formula: `.katex-display` or a standalone `.katex`. */
+export const UNIT_SELECTOR = '.katex-display, .katex, .katex-error, mjx-container';
+
+/**
+ * The outermost element of one rendered formula: `.katex-display`, a standalone `.katex`,
+ * a KaTeX parse-error span (`.katex-error`, whose text is the TeX source) or `mjx-container`.
+ */
 export function findRenderedUnits(root: ParentNode): Element[] {
   const out: Element[] = [];
-  root.querySelectorAll('.katex-display, .katex, mjx-container').forEach((el) => {
+  root.querySelectorAll(UNIT_SELECTOR).forEach((el) => {
     if (el.closest(SKIP_UNITS)) return;
-    if (el.matches('.katex') && el.parentElement?.closest('.katex-display')) return;
+    if ((el.matches('.katex') || el.matches('.katex-error')) && el.parentElement?.closest('.katex-display')) return;
     if (el.matches('mjx-container') && el.parentElement?.closest('mjx-container')) return;
     if (el.parentElement?.closest('.katex')) return; // nested inside another formula
     out.push(el);
@@ -24,6 +29,7 @@ export function findRenderedUnits(root: ParentNode): Element[] {
 
 export function isDisplayUnit(unit: Element): boolean {
   if (unit.matches('.katex-display')) return true;
+  if (unit.matches('.katex-error')) return !!unit.parentElement?.closest('[data-d-block], .katex-display');
   if (unit.matches('mjx-container')) return unit.getAttribute('display') === 'true';
   return false;
 }
@@ -32,6 +38,10 @@ const SOURCE_ATTRS = ['data-latex', 'data-tex', 'data-math', 'data-formula'];
 
 /** Recovers the original TeX, or null if it is not present in the DOM. Never reverse-engineers glyphs. */
 export function getTexSource(unit: Element): string | null {
+  // KaTeX parse errors render the original TeX source as the span's text.
+  if (unit.matches('.katex-error')) return unit.textContent?.trim() || null;
+  const err = unit.querySelector(':scope > .katex-error');
+  if (err && !unit.querySelector('annotation')) return err.textContent?.trim() || null;
   const ann = unit.querySelector(
     'annotation[encoding="application/x-tex"], annotation[encoding="application/x-latex"], annotation[encoding="TeX"]',
   );
