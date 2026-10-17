@@ -69,6 +69,37 @@ describe('engine semantics', () => {
     if (r.ok) expect(adaptor.outerHTML(r.node)).toContain('gradientnabla');
   });
 
+  it('\\ln[\\ce{A}] keeps standard meaning (physics would make [A] a power: ln^A)', async () => {
+    // Real case from chatgpt.com: "对 \ln[\ce{A}] 求导"
+    const cases = ['\\ln[\\ce{A}]', '\\frac{\\mathrm d\\ln r}{\\mathrm d\\ln[\\ce{A}]}', '\\sin[x]', '\\exp[-E_a/RT]', '\\log[c]'];
+    for (const tex of cases) {
+      const svg = await svgOf(tex);
+      expect(svg, tex).not.toContain('data-mml-node="msup"'); // none of these has a superscript
+      expect(svg, tex).toContain('data-c="5B"'); // the "[" is printed
+    }
+    // Sanity: with physics semantics the same input DOES become a power, so the check is meaningful.
+    const phys = new TexEngine<any>(adaptor, '', { macros: {}, physicsOverridesStandard: true }, loadFont);
+    const r = await phys.render('\\ln[\\ce{A}]', false, M);
+    expect(r.ok && adaptor.outerHTML(r.node)).toContain('data-mml-node="msup"');
+  });
+
+  it('standard functions keep base spacing: \\sin x and \\ln(x)', async () => {
+    expect(await svgOf('\\sin x + \\ln(x) + \\det A + \\Pr(A)')).toContain('<svg');
+  });
+
+  it('physicsOverridesStandard=true restores physics function syntax (\\sin[2](x) = power)', async () => {
+    const e2 = new TexEngine<any>(adaptor, '', { macros: {}, physicsOverridesStandard: true }, loadFont);
+    const r = await e2.render('\\sin[2](x)', false, M);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(adaptor.outerHTML(r.node)).toContain('data-mml-node="msup"');
+  });
+
+  it('user macros override the restored standard functions', async () => {
+    const e3 = new TexEngine<any>(adaptor, '', { macros: { ln: '\\operatorname{Ln}' }, physicsOverridesStandard: false }, loadFont);
+    const r = await e3.render('\\ln x', false, M);
+    expect(r.ok && adaptor.outerHTML(r.node)).toContain('data-c="4C"'); // capital L
+  });
+
   it('user macros work', async () => {
     const svg = await svgOf('\\vect{v} \\cdot \\mat{A} \\ee^{\\ii\\pi}');
     expect(svg).toContain('<svg');

@@ -76,5 +76,21 @@ main{max-width:760px;margin:0 auto;padding:24px}
 </style>
 <link rel="stylesheet" href="https://chatgpt.com/__fixture/katex.css">
 </head><body><main><div id="thread">${turns.join('\n')}</div>
-<form><div contenteditable="true" class="ProseMirror" id="composer">$x^2$ draft in composer</div></form></main></body></html>`;
+<form><div contenteditable="true" class="ProseMirror" id="composer">$x^2$ draft in composer</div></form></main>
+<script>
+// Like chatgpt.com / KaTeX copy-tex: on copy, clone the selection and replace each .katex with its
+// TeX, ignoring CSS visibility. Reproduces the duplicate-formula copy bug when originals are hidden.
+document.addEventListener('copy', function (e) {
+  var s = document.getSelection();
+  if (!s || s.isCollapsed) return;
+  var frag = s.getRangeAt(0).cloneContents();
+  if (!frag.querySelector('.katex')) return;
+  frag.querySelectorAll('.katex').forEach(function (k) {
+    var a = k.querySelector('annotation');
+    k.replaceWith('$' + (a ? a.textContent : '') + '$');
+  });
+  e.clipboardData.setData('text/plain', frag.textContent);
+  e.preventDefault();
+});
+</script></body></html>`;
 }

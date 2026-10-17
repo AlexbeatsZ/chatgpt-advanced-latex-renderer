@@ -72,6 +72,18 @@
 - 关闭/切换模式：`restoreAllBlocks()` + 删除所有 `alr-*` 节点 + 移除 `data-alr-*` 属性即可完全恢复
   （e2e 测试对比关闭后 DOM 与原始 DOM 完全一致）。
 
+### 复制（`src/content/copy.ts`）
+- ChatGPT 的复制逻辑（与 KaTeX copy-tex 相同思路）会克隆选区 DOM 并把每个 `.katex` 换成其 TeX，**不看 CSS**。
+  我们隐藏的原 KaTeX 仍在 DOM 中，加上我们节点里的不可见 `$…$` 辅助文字，导致同一公式被复制 2～3 次（用户在真实页面发现）。
+- 处理：`window` 捕获阶段的 `copy` 监听（早于页面处理器）。选区触及任何 `<alr-math>` 时自行生成 text/plain 与 text/html：
+  去掉 `[data-alr-hidden]`，`<alr-math>` → `$tex$`/`$$tex$$`，选区内其余原生 KaTeX 也转换为 TeX；然后 `preventDefault` +
+  `stopImmediatePropagation`。选区不含我们的节点时完全交给页面。e2e 用页面内 copy-tex 式处理器 + 真实 Ctrl+C 验证（去掉修复后该测试确实失败）。
+
+### 性能
+- 渲染前读取 `clientWidth`/`getComputedStyle` 会在刚插入上一个公式后强制整页同步重排；633 个公式、4.3 万元素的真实对话中，
+  Windows 上一屏需要约 3 s。字号/宽度现缓存 3 s（SVG 以 ex 为单位，影响很小），一屏降到约 0.6～1 s。
+- 冷启动：大型对话刚打开时 ChatGPT 自己渲染 KaTeX 会冻结主线程十几秒，首批升级会因此推迟。
+
 ### 排除区域
 `pre, code, kbd, samp, textarea, input, select, button, script, style, svg, .cm-editor, [contenteditable],
 .katex, .katex-error, mjx-container, math, alr-math, alr-text`

@@ -478,6 +478,23 @@ await test('selection copy yields LaTeX; Alt+click copies source', async () => {
     return s.toString();
   });
   assert(sel.includes('$a+b=c$') && sel.includes('\\ce{2H2 + O2 -> 2H2O}'), `selection text: ${sel}`);
+  // Real Ctrl+C with a ChatGPT-like copy-tex handler on the page: every formula exactly once.
+  await page.evaluate(() => {
+    const p = [...document.querySelectorAll('p')].find((c) => c.textContent.includes('自由基阳离子'));
+    const range = document.createRange();
+    range.setStartBefore([...document.querySelectorAll('p')].find((c) => c.textContent.includes('能斯特方程')));
+    range.setEndAfter(p);
+    getSelection().removeAllRanges();
+    getSelection().addRange(range);
+  });
+  await page.keyboard.press('Control+C');
+  await page.waitForTimeout(200);
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  const times = (s) => copied.split(s).length - 1;
+  for (const t of ['\\ce{Fe^{3+} + e- -> Fe^{2+}}', '\\ce{A <=> B}', '\\ce{M^{+.}}', '\\pu{25 kJ mol-1}', 'E=E^\\circ-\\frac{RT}{nF}\\ln Q']) {
+    eq(times(t), 1, `copies of ${t} in clipboard (${JSON.stringify(copied).slice(0, 300)})`);
+  }
+  assert(copied.includes('$$\\ce{A <=> B}$$'), 'display formula copied as $$...$$');
   const box = await page.evaluate(() => {
     const m = [...document.querySelectorAll('alr-math')].find((e) => e.getAttribute('data-alr-tex') === '\\ce{A <=> B}');
     m.scrollIntoView({ block: 'center' });

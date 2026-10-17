@@ -27,7 +27,7 @@
 | physics `\bra \ket \braket` vs braket 宏包 | physics 语义（`\bra{a}\ket{b}` 收缩为 ⟨a|b⟩，`\braket{a}{b}`） | braket 自带优先级 3 会压过 physics，因此以 `['braket', 10]` 加载；braket 的 `\set \Set \Bra \Ket \Braket` 仍可用 |
 | braket 风格 `\braket{a|b}` / `\braket{a|H|b}` | 等价改写为 `\braket{a}{b}` / `\mel{a}{H}{b}` | `rewriteBraket`，只在单参数且含顶层 `|` 时触发；可关 |
 | physics `\qty` vs siunitx `\qty{25}{kJ}` | 第一参数为数字且紧跟第二个 `{}` → siunitx 语义；其余（`\qty(…)`、`\qty{\frac ab}`）→ physics | `rewriteSiunitx`（还支持 `\SI \si \unit \num \ang` 子集）；可关 |
-| physics 重定义标准命令 `\div`（÷→∇·）、`\Re`、`\Im` | 保持标准 LaTeX 语义 | `STANDARD_RESTORE` 宏；设置 “physics 覆盖标准命令” 可改回 physics |
+| physics 重定义标准命令：`\sin \cos \tan … \exp \log \ln \det \Pr` 带可选 `[n]` **幂次**参数与自动括号（真实对话中 `\ln[\ce{A}]` 被渲染成 ln^A）；`\div`（÷→∇·）、`\Re`、`\Im` | 保持标准 LaTeX 语义 | 自建 TeX 包 `alrstandard`（`src/render/standardFns.ts`，优先级 4：高于 physics 5、低于用户宏 3），重新注册 base 的 NamedFn/NamedOp/字符定义；设置“physics 覆盖标准命令”时不加载。physics 独有名（`\asin`、`\tr`、`\erf`、`\sine` 等）不受影响 |
 | 用户宏与以上改写 | 用户定义的名字不被改写 | `preprocessTex({exclude})` |
 
 验证：`tests/unit/engine.test.ts` 通过输出中竖线个数区分 physics 与 braket 语义（旧的“两者结果相等”断言曾在两者都错时误判通过）。

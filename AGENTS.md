@@ -7,14 +7,14 @@ TeX（annotation 优先，绝不反推）；流式、长对话、内部导航兼
 弹出界面含开关、模式、重新渲染、状态与错误、字号、自定义宏。
 
 ## Current State
-- 版本 0.2.0，分支 main，远端公开仓库 https://github.com/AlexbeatsZ/chatgpt-advanced-latex-renderer 。
+- 版本 0.2.1（未打标签发布），分支 main，远端公开仓库 https://github.com/AlexbeatsZ/chatgpt-advanced-latex-renderer 。
   CI（`.github/workflows/ci.yml`）每次推送 main 跑 typecheck/单元/扩展与脚本构建/e2e；`release.yml` 在 `v*` 标签上校验版本并发布扩展 zip、`.user.js` 和 `.meta.js`。
 - 已实现：KaTeX 失败/偏好命令升级、完整模式、原文公式原位渲染（含题目卡片 label）、```latex 代码块预览失败恢复、
   懒渲染（真实滚动容器为根）、批处理观察器、关闭精确还原、选择复制/Alt+单击复制、弹出界面、调试日志
   （页面控制台 `localStorage.setItem('alr-debug','1')`）。
 - 油猴版：约 1.93 MiB，内置引擎与基础字形；额外字形为固定版本 JSON（40 个区段），下载后校验哈希并缓存，不执行远程代码。两种版本以 DOM 标记互斥。
-- 2026-10-17 当前工作区已复核 typecheck、230 单元、15 扩展 e2e、7 脚本 e2e，并查看面板截图。脚本 e2e 用 GM 垫片，不能代替真实 Tampermonkey 验收；真实 chatgpt.com 历史验证见 README。
-- Mac 项目：`/Users/meta/Project/Workspaces/chatgpt-advanced-latex-renderer`；v0.2.0 已更新，类型检查、230 单元测试、扩展与脚本构建通过。Chrome 配置已有此项目 `dist` 的扩展登记；新版本重新加载和真实页面运行尚未验收。
+- 2026-10-17 0.2.1 工作区复核：typecheck、239 单元、15 扩展 e2e、7 脚本 e2e 通过。脚本 e2e 用 GM 垫片，不能代替真实 Tampermonkey 验收；真实 chatgpt.com 历史验证见 README。
+- Mac 项目：`/Users/meta/Project/Workspaces/chatgpt-advanced-latex-renderer`（git clone，`git pull && pnpm build` 更新）。2026-10-17 已在 Mac Chrome 真实 chatgpt.com 验证 v0.2.0 扩展运行（`data-alr-runtime=extension`，0 错误、0 缺字形）；0.2.1 尚未同步到 Mac。
 - 已知待确认：代码块多行公式改为内联 `display:block` 后未在真实页复看；Edge 未实测。
 - 恢复入口：`pnpm install && pnpm build`，Chrome 加载 `dist/`。用户的 Windows Chrome 已加载本项目 `dist/`
   （内容脚本主模块运行时读盘，改代码后刷新页面即可；改 manifest/content.css 需在扩展页重新加载）。
@@ -24,7 +24,8 @@ TeX（annotation 优先，绝不反推）；流式、长对话、内部导航兼
 - [完成] Release v0.1.0（2026-10-17）：https://github.com/AlexbeatsZ/chatgpt-advanced-latex-renderer/releases/tag/v0.1.0 ，zip（约 3.5 MB，根目录即 manifest.json）+ SHA-256。
 - [完成] v0.2.0（2026-10-17）：实现提交 `cc5b52e`，Windows/Mac 构建和本地检查通过；GitHub CI `39027023769`、Release `39027195242` 通过，已发布扩展 zip、脚本和更新元数据： https://github.com/AlexbeatsZ/chatgpt-advanced-latex-renderer/releases/tag/v0.2.0 。
 - [完成] 从 jsDelivr 和 GitHub raw 实际请求 v0.2.0 的 arrows.json 均返回 200，数据与脚本清单一致；Mac 已同步同一实现提交。
-- [待验收] Mac Chrome 重新加载扩展；真实 Tampermonkey + chatgpt.com。Windows UI 工具本轮因不能可靠识别浏览器 URL 停止，不绕过工具限制。
+- [完成] 0.2.1（用户在真实页面发现）：复制时公式重复 2～3 次 → `copy.ts` 捕获阶段自行生成剪贴板；physics 把 `\ln[\ce{A}]` 渲染成 ln^A → `alrstandard` 包恢复标准函数；Windows 大对话一屏需约 3 s → 缓存字号/宽度避免逐公式强制重排（约 0.6～1 s）。真实页已验证 `\ln[\ce{A}]` 与速度；复制修复只在模拟页 + 真实 Ctrl+C 验证（自动化工具无法在真实页触发复制事件）。
+- [待验收] 真实 Tampermonkey + chatgpt.com（Windows Chrome 同时装有扩展时脚本按设计空闲）。
 - [待办] Chrome Web Store / Edge Add-ons 上架（需用户的开发者账号）。
 - [完成] 核心渲染、DOM 适配、测试体系、文档、许可证审查（依赖全为 Apache-2.0，参考项目未复制代码）。
 
@@ -50,3 +51,6 @@ TeX（annotation 优先，绝不反推）；流式、长对话、内部导航兼
 - MathJax 包优先级数字越小越优先，braket 自带 3 会压过 physics；用 `['braket', 10]`。测试冲突语义时不要用“两种写法输出相同”这种两边都错也会通过的断言。
 - ChatGPT 消息在 `.thread-scroll-container` 内滚动；块公式盒 `overflow:auto` 但不滚动。IO 必须以真实滚动容器为根。
 - 在 Bash 工具里用 heredoc / `node -e` 写含反斜杠的 TS/正则会被吞掉反斜杠；含 LaTeX 的代码一律用文件编辑工具写。
+- 页面自己的复制处理器会克隆选区并忽略 CSS：任何“隐藏原节点 + 显示替代节点”的方案都要接管复制，否则内容重复。
+- physics 宏包不只是冲突 `\bra/\qty`，还把 `\ln \sin \exp` 等的 `[...]` 变成幂次；化学动力学的 `\ln[\ce{A}]` 会被误渲染。新增宏包前检查它重定义的所有标准命令。
+- 在渲染循环里读取布局（clientWidth/getComputedStyle）会在每次插入后强制整页重排；在快机器上看不出来，必须在大页面、慢机器上测。

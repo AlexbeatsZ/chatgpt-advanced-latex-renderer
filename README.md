@@ -54,7 +54,7 @@ ChatGPT 自带的 KaTeX 不认识 `\ce` 等命令：要么把命令名显示成�
 | ```latex 代码块 | 预览失败（“LaTeX 代码无效”）时，从代码块源码恢复，按空行逐个渲染；“显示源代码”不受影响 |
 | 动态页面 | MutationObserver 批处理（150 ms 防抖、最长 700 ms），流式输出中完整的公式逐步出现，未闭合的保持原样 |
 | 懒渲染 | 只渲染滚动容器视口上下约 1200 px 内的公式，长对话不卡顿 |
-| 复制 | 选中文字复制时公式以 `$…$` 形式出现；Alt+单击公式复制 LaTeX 源码（MathJax 与原生 KaTeX 均可） |
+| 复制 | 选中文字复制（Ctrl+C）时每个公式恰好出现一次：行内 `$…$`、独立 `$$…$$`；Alt+单击公式复制 LaTeX 源码（MathJax 与原生 KaTeX 均可） |
 | 弹出界面 | 开关、模式、重新渲染、引擎状态与错误列表、字号、自定义宏（保存时校验）、高级选项 |
 
 ## 支持的命令（MathJax 已实现的部分）
@@ -71,7 +71,7 @@ ChatGPT 自带的 KaTeX 不认识 `\ce` 等命令：要么把命令名显示成�
 |---|---|
 | physics 与 braket 都定义 `\bra \ket \braket` | physics 语义；`\braket{a|b}` 这种 braket 写法自动改写为等价的 `\braket{a}{b}`，`\braket{a|H|b}` → `\mel{a}{H}{b}` |
 | physics `\qty` 与 siunitx `\qty{数}{单位}` | 第一参数是数字且紧跟第二个参数 → 按 siunitx；其余按 physics |
-| physics 改写标准命令 `\div`（÷ → ∇·）、`\Re`、`\Im` | 保持标准 LaTeX 含义（可在高级选项中改为 physics 含义） |
+| physics 改写标准命令：`\ln \log \exp \sin \cos …` 的 `[n]` 变成幂次（`\ln[\ce{A}]` 会显示成 ln^A），`\div`（÷ → ∇·）、`\Re`、`\Im` | 保持标准 LaTeX 含义：`\ln[\ce{A}]` 就是 ln[A]（可在高级选项中改为 physics 含义；physics 的 `\sine`、`\logarithm`、`\divergence` 等长名始终可用） |
 | 你的自定义宏与以上规则 | 你定义的名字优先，不被任何改写触碰 |
 
 ## 自定义宏
@@ -132,7 +132,7 @@ pnpm build && pnpm test:e2e
 pnpm build:userscript && pnpm test:userscript
 ```
 
-- 单元测试（Vitest，230 个）：定界符/货币/转义/嵌套括号/未闭合；宏解析；冲突改写；真实 MathJax 编译全部
+- 单元测试（Vitest，239 个）：定界符/货币/转义/嵌套括号/未闭合；宏解析；冲突改写；真实 MathJax 编译全部
   夹具公式（含 20 条取自真实对话的公式），并断言无缺字形；jsdom 上的提取、原位替换与还原、代码块预览；
   油猴脚本的字形 JSON 路径（全部公式重新渲染、篡改拒绝、镜像回退、缓存）。
 - 油猴脚本端到端（7 个）：真实 Chromium 中注入构建出的 `.user.js`（GM_* 垫片代替 Tampermonkey），字体主机请求被拦截：

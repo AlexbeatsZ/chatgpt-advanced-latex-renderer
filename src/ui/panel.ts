@@ -57,7 +57,7 @@ export const PANEL_HTML = `
   <label class="check"><input type="checkbox" id="userMessages" /> 同时处理我发送的消息</label>
   <label class="check"><input type="checkbox" id="smartBraket" /> <code>\\braket{a|b}</code> 按 braket 宏包语义处理</label>
   <label class="check"><input type="checkbox" id="siunitx" /> siunitx 子集（<code>\\qty{25}{kJ.mol^-1}</code>、<code>\\SI</code>、<code>\\si</code>）</label>
-  <label class="check"><input type="checkbox" id="physicsOverridesStandard" /> physics 覆盖标准命令（<code>\\div</code>=散度，<code>\\Re</code>/<code>\\Im</code>=算符）</label>
+  <label class="check"><input type="checkbox" id="physicsOverridesStandard" /> physics 覆盖标准命令（<code>\\ln[n]</code>=幂次，<code>\\div</code>=散度，<code>\\Re</code>/<code>\\Im</code>=算符）</label>
   <label class="check"><input type="checkbox" id="altClickCopy" /> Alt+单击公式复制 LaTeX 源码</label>
 </details>
 <footer>本地渲染 · 不上传任何聊天内容 · <span id="flavor"></span> · MathJax <span id="mj-version">4</span></footer>

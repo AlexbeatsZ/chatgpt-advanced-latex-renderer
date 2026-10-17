@@ -18,6 +18,7 @@ import {
   applyBlock, collectText, findRawBlocks, forgetDetached, isUpToDate, restoreAllBlocks, restoreBlock, scanBlock, stateOf, BLOCK_SELECTOR,
 } from '../dom/rawText';
 import { BatchedObserver } from './observer';
+import { handleCopy } from './copy';
 import { LazyQueue } from './lazy';
 
 type Engine = TexEngine<HTMLElement>;
@@ -58,6 +59,8 @@ export class Controller {
     this.settings = settings;
     this.computeDerived();
     document.addEventListener('click', (e) => this.onClick(e), true);
+    // Capture phase on window: runs before the page's own TeX-copy handler (see copy.ts).
+    window.addEventListener('copy', (e) => this.active && handleCopy(e), true);
     if (settings.enabled) this.enable();
   }
 
@@ -279,11 +282,23 @@ export class Controller {
     return r.ok ? { ok: true, node: r.node.cloneNode(true) as HTMLElement } : r;
   }
 
+  /**
+   * Font size / container width for MathJax. Reading them right after inserting a formula forces a
+   * synchronous re-layout of the whole page (seconds per screen on a 40k-element ChatGPT thread on a
+   * slower PC), so they are measured once and reused for a short time. SVG output is sized in ex,
+   * so the exact em only affects minor spacing; the width only matters for \tag placement.
+   */
+  private metricsCache: { em: number; width: number; at: number } | null = null;
+
   private metrics(ctx: Element) {
-    const host = (ctx.parentElement ?? ctx) as HTMLElement;
-    const em = (parseFloat(getComputedStyle(host).fontSize) || 16) * (this.settings.scale / 100);
-    const block = (ctx.closest(BLOCK_SELECTOR + ', div') as HTMLElement | null) ?? host;
-    return { em, ex: em / 2, containerWidth: Math.max(200, block.clientWidth || 700) };
+    const now = performance.now();
+    if (!this.metricsCache || now - this.metricsCache.at > 3000) {
+      const host = (ctx.parentElement ?? ctx) as HTMLElement;
+      const block = (ctx.closest(BLOCK_SELECTOR + ', div') as HTMLElement | null) ?? host;
+      this.metricsCache = { em: parseFloat(getComputedStyle(host).fontSize) || 16, width: block.clientWidth || 700, at: now };
+    }
+    const em = this.metricsCache.em * (this.settings.scale / 100);
+    return { em, ex: em / 2, containerWidth: Math.max(200, this.metricsCache.width) };
   }
 
   private sourceOf(unit: Element): string | null {

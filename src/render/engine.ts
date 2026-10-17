@@ -44,6 +44,7 @@ import { MathJaxNewcmFont } from '@mathjax/mathjax-newcm-font/mjs/svg.js';
 // mhchem arrows/bonds live in a separate font extension in MathJax 4 (variant '-mhchem').
 import { MathJaxMhchemFontExtension } from '@mathjax/mathjax-mhchem-font-extension/mjs/svg.js';
 import type { MacroMap } from '../tex/macros';
+import './standardFns'; // registers the 'alrstandard' TeX package
 
 /**
  * When two packages define the same command, the one with the higher priority (lower number,
@@ -61,12 +62,14 @@ export const TEX_PACKAGES: (string | [string, number])[] = [
   'verb', 'begingroup', 'configmacros',
 ];
 
-/** Restores standard LaTeX meanings that the physics package redefines. */
-export const STANDARD_RESTORE: MacroMap = {
-  div: '\\divsymbol', // physics: divergence; LaTeX: ÷
-  Re: 'ℜ', // physics: Re operator; LaTeX: ℜ
-  Im: 'ℑ', // physics: Im operator; LaTeX: ℑ
-};
+/**
+ * 'alrstandard' (src/render/standardFns.ts) restores the standard meaning of the commands physics
+ * redefines (\ln[...] power argument, \div, \Re, \Im, \sin...). Omitted when the user opts into
+ * physics semantics.
+ */
+export function texPackages(physicsOverridesStandard: boolean): (string | [string, number])[] {
+  return physicsOverridesStandard ? TEX_PACKAGES : [...TEX_PACKAGES, 'alrstandard'];
+}
 
 export interface EngineConfig {
   macros: MacroMap;
@@ -108,10 +111,9 @@ export class TexEngine<N = unknown> {
       handlerRegistered = true;
     }
     installLoader(loadFont); // mathjax.asyncLoad is global: the latest engine's loader is used
-    const macros = { ...(cfg.physicsOverridesStandard ? {} : STANDARD_RESTORE), ...cfg.macros };
     this.tex = new TeX({
-      packages: TEX_PACKAGES,
-      macros,
+      packages: texPackages(cfg.physicsOverridesStandard),
+      macros: cfg.macros,
       tags: 'none',
       // Collect the message, then let MathJax build its normal error node.
       formatError: (jax: any, err: any) => {
