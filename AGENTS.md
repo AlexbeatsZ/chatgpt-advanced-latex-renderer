@@ -19,7 +19,8 @@ TeX（annotation 优先，绝不反推）；流式、长对话、内部导航兼
 
 ## Active Work
 - [完成] GitHub 公开仓库 + CI + Release 工作流。
-- [待办] 首个 Release（推 `v0.1.0` 标签，需用户同意）；Chrome Web Store / Edge Add-ons 上架（需用户的开发者账号）；油猴脚本版本（用户提过，未开始）。
+- [完成] Release v0.1.0（2026-10-17）：https://github.com/AlexbeatsZ/chatgpt-advanced-latex-renderer/releases/tag/v0.1.0 ，zip（约 3.5 MB，根目录即 manifest.json）+ SHA-256。
+- [待办] Chrome Web Store / Edge Add-ons 上架（需用户的开发者账号）；油猴脚本版本（用户提过，未开始）。
 - [完成] 核心渲染、DOM 适配、测试体系、文档、许可证审查（依赖全为 Apache-2.0，参考项目未复制代码）。
 
 ## Build / Run / Test
