@@ -27,6 +27,13 @@
 7. 单美元 `$a+b=c$` 原生**不渲染**，保持为文本；`$5 到 $10` 作为文本保留。
 8. 模型有时会故意输出字面量 `\(...\)`、`$$...$$`（在解释语法时），它们在 DOM 中作为普通文本存在。
 9. 页面响应头中未见 CSP。
+10. 题目卡片组件（`div[data-d-component=box]` 内的 `p` 与 `div[data-d-component=radio] > label[for] > 文本`）
+    中的公式**原生完全不渲染**，以 `\(\ce{2A -> B}\)` 原文显示（该历史对话中 9 处）。
+
+## 真实页面提取层验证（只读探针，2026-10-17）
+`tests/real/probe-entry.ts` 打包为 IIFE 注入上述历史对话：5 条助手 + 5 条用户消息；159 个 KaTeX 公式
+全部恢复出源码；85 个失败、失败命令全为 `\ce`；0 个公式位于消息外；原文扫描找到 9 个未渲染公式，全部
+位于题目卡片中，与人工检查一致。
 
 ## 设计决策
 
@@ -41,16 +48,26 @@
 源码中出现“偏好 MathJax 的命令”（默认 `\ce`、`\pu` + 用户自定义宏名）。
 
 ### DOM 修改原则（React 安全）
-- **绝不删除、移动或拆分页面自有节点**（Google 翻译类问题会让 React 在 `removeChild` 时崩溃）。
+- **绝不删除、移动或拆分页面自有节点**（Google 翻译类问题会让 React 在 `removeChild`/`insertBefore` 时崩溃）。
 - KaTeX 升级：给原 `.katex`/`.katex-display` 加 `data-alr-hidden`（CSS 隐藏），在其后插入我们自己的
-  `<alr-math>` 兄弟节点。React 重置该处 innerHTML 时两者一起消失，观察器会重新处理（有缓存）。
-- 原文公式（`$...$` 等）：整块“隐藏原块 + 插入克隆块”。克隆块是我们拥有的节点，可以随意拆分文本；
-  原块文本变化（流式/重渲染）时删除克隆并重建。
-- 关闭/切换模式：删除所有 `alr-*` 节点、移除 `data-alr-*` 属性即可完全恢复。
+  `<alr-math>` 兄弟节点。React 重置该处 innerHTML 时两者一起消失，观察器会重新处理（有缓存）；
+  只剩我们节点的情况由 `gc()` 清理。
+- 原文公式（`$...$` 等）：**原位替换**（`src/dom/rawText.ts`）。只改页面文本节点的 `data`（记录原值与
+  我们写入的值），在其后插入 `<alr-math>` / `<alr-text>`（后缀文字）。跨多个逐词 span 的公式：首节点
+  保留前缀、中间节点置空、末节点保留后缀；公式内的 `<br>` 加 `data-alr-hidden`。
+  - 还原：仅当节点当前值仍等于我们写入的值时才写回原值；React 期间改过的值保持 React 的。
+  - 过期判断 `isUpToDate`：我们插入的节点仍在、被改节点仍在且值未被改、页面意图文本未变。
+  - 文本收集 `collectText` 看到的是“页面意图文本”（跳过 `alr-*`，被改节点报告原值），因此重扫幂等。
+- **失败方案（勿再采用）**：早期版本对原文块“隐藏原块 + 插入克隆块”。克隆节点没有 React 的事件绑定
+  和后续属性更新：真实页面的题目卡片（`label[for] > 文本`）选中后无反馈，段落中的引用卡片等交互失效。
+- 关闭/切换模式：`restoreAllBlocks()` + 删除所有 `alr-*` 节点 + 移除 `data-alr-*` 属性即可完全恢复
+  （e2e 测试对比关闭后 DOM 与原始 DOM 完全一致）。
 
 ### 排除区域
-`pre, code, kbd, samp, textarea, input, script, style, .cm-editor, [contenteditable], .katex, mjx-container, alr-math, alr-block`
-这些节点在原文扫描中被视为“断点”（插入 `￼`），公式不能跨越它们。
+`pre, code, kbd, samp, textarea, input, select, button, script, style, svg, .cm-editor, [contenteditable],
+.katex, .katex-error, mjx-container, math, alr-math, alr-text`
+这些节点在原文扫描中被视为“断点”（插入 `￼`），公式不能跨越它们。`label` 本身不排除（题目选项文本
+就在 label 里），但其中的控件不会被触碰。
 
 ### 防循环
 所有 DOM 写操作都在 `observer.mutate(fn)` 中进行：写之前先 `takeRecords()` 并入队（保留页面变化），

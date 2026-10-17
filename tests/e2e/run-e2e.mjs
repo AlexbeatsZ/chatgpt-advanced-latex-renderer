@@ -70,7 +70,9 @@ addPage(
     ]),
   ],
 );
-addPage('stream', [F.assistantTurn(0, [F.para('<span id="s"></span>')])]);
+// An earlier answer with a \ce formula: the engine is already loaded when streaming starts,
+// as on a real page after the first formula.
+addPage('stream', [F.assistantTurn(0, [F.blockMath('\\ce{H2O}')]), F.assistantTurn(1, [F.para('<span id="s"></span>')])]);
 
 const longTurns = [];
 for (let i = 0; i < 60; i++) {
@@ -86,6 +88,7 @@ for (let i = 0; i < 60; i++) {
   );
 }
 addPage('long', longTurns);
+addPage('long-inner', longTurns, { innerScroll: true });
 
 // ---------------------------------------------------------------- runner
 const results = [];
@@ -350,7 +353,8 @@ await test('mode switch and re-render never duplicate formulas', async () => {
 
 await test('streaming: formulas appear when complete, partial ones stay raw, no per-token full re-render', async () => {
   const page = await open('stream');
-  await page.waitForTimeout(500);
+  await settle(page, 1200);
+  const base = (await inspect(page)).alr; // the pre-existing \ce formula
   const tokens = '速率方程 \\( r = k[\\mathrm{A}]^2 \\) 中，反应 \\(\\ce{2NO2 -> N2O4}\\) 的 $k$ 与温度有关，但 \\(x + 尚未结束'.split(/(?<=\s)|(?=\\\()/);
   // Count how many times our nodes are (re)applied to detect per-token re-rendering.
   await page.evaluate(() => {
@@ -368,12 +372,12 @@ await test('streaming: formulas appear when complete, partial ones stay raw, no 
       document.getElementById('s').appendChild(s);
     }, t);
     await page.waitForTimeout(60); // ~16 tokens/s
-    seen.push(await page.evaluate(() => document.querySelectorAll('alr-math').length));
+    seen.push(await page.evaluate(() => document.querySelectorAll('alr-math').length) - base);
   }
   await settle(page, 1200);
   const r = await inspect(page);
   for (const t of ['r = k[\\mathrm{A}]^2', '\\ce{2NO2 -> N2O4}', 'k']) assert(r.alrTex.includes(t), `streamed formula ${t} missing: ${JSON.stringify(r.alrTex)}`);
-  eq(r.alr, 3, 'each streamed formula rendered exactly once');
+  eq(r.alr - base, 3, 'each streamed formula rendered exactly once');
   assert(r.visibleText.includes('\\(x + 尚未结束'), 'incomplete formula must remain raw text');
   const applies = await page.evaluate(() => window.__applies);
   assert(applies < tokens.length / 2, `re-applied ${applies} times for ${tokens.length} tokens (batching not effective)`);
@@ -503,6 +507,35 @@ await test('long conversation: lazy, batched rendering stays responsive', async 
   eq(all.raw, 120, 'all raw formulas rendered');
   const worst = Math.max(0, ...all.longTasks);
   console.log(`   formulas=${all.total}+${all.raw} initial(${first.done} rendered) ${tFirst} ms; longest task ${worst.toFixed(0)} ms; long tasks ${all.longTasks.length}`);
+});
+
+await test('inner scroll container (like chatgpt.com): formulas below the fold are pre-rendered', async () => {
+  await setSettings({ mode: 'full' });
+  const page = await open('long-inner');
+  await settle(page, 2500);
+  const check = () =>
+    page.evaluate(() => {
+      const sc = document.getElementById('scroller');
+      const h = sc.clientHeight;
+      const top0 = sc.getBoundingClientRect().top;
+      const below = [...document.querySelectorAll('.katex-display, .katex')]
+        .filter((k) => !(k.matches('.katex') && k.parentElement.closest('.katex-display')))
+        .map((k) => {
+          const hidden = k.hasAttribute('data-alr-hidden');
+          // hidden units have no box: measure their MathJax replacement instead
+          const box = (hidden ? k.nextElementSibling : k).getBoundingClientRect();
+          return { y: box.top - top0, hidden };
+        })
+        .filter((u) => u.y > h && u.y < h + 900);
+      return { n: below.length, pending: below.filter((u) => !u.hidden).length };
+    });
+  let r = await check();
+  assert(r.n > 0, 'fixture should have formulas just below the fold');
+  eq(r.pending, 0, 'formulas within 900px below the fold already rendered');
+  await page.evaluate(() => document.getElementById('scroller').scrollBy(0, 4000));
+  await settle(page, 1500);
+  r = await check();
+  eq(r.pending, 0, 'after scrolling, formulas below the new fold are pre-rendered too');
 });
 
 await test('popup renders and reports "not a ChatGPT tab" outside ChatGPT', async () => {

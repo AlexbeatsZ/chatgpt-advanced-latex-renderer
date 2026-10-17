@@ -48,7 +48,11 @@ export function userTurn(n, plain) {
   return `<div data-content-search-unit-key="fallback-turn-${n}:0:user"><div data-user-message-bubble="true"><div class="text-size-chat whitespace-pre-wrap">${esc(plain)}</div></div></div>`;
 }
 
-export function page(turns, { dark = false } = {}) {
+export function page(turns, { dark = false, innerScroll = false } = {}) {
+  if (innerScroll) {
+    // Like chatgpt.com: the thread scrolls inside an element, not the window.
+    return page(turns, { dark }).replace('<main>', '<div id="scroller" style="height:100vh;overflow-y:auto"><main>').replace('</main>', '</main></div>');
+  }
   return `<!doctype html><html lang="zh-CN" class="${dark ? 'dark' : 'light'}" style="color-scheme:${dark ? 'dark' : 'light'}"><head><meta charset="utf-8"><title>ChatGPT</title>
 <style>
 body{margin:0;font:16px/1.75 ui-sans-serif,system-ui,"Segoe UI","Microsoft YaHei",sans-serif;background:${dark ? '#212121' : '#fff'};color:${dark ? '#ececec' : '#0d0d0d'}}

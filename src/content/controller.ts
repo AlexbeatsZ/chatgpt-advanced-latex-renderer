@@ -15,6 +15,7 @@ import {
   applyBlock, collectText, findRawBlocks, forgetDetached, isUpToDate, restoreAllBlocks, restoreBlock, scanBlock, stateOf, BLOCK_SELECTOR,
 } from '../dom/rawText';
 import { BatchedObserver } from './observer';
+import { LazyQueue } from './lazy';
 
 type Engine = TexEngine<HTMLElement>;
 type Rendered = { ok: true; node: HTMLElement } | { ok: false; error: string };
@@ -30,7 +31,7 @@ export class Controller {
   private engineError?: string;
   private mathjaxVersion?: string;
   private observer = new BatchedObserver((dirty) => this.onDirty(dirty));
-  private io: IntersectionObserver | null = null;
+  private lazy = new LazyQueue((els) => this.onVisible(els));
   private cache = new Map<string, Rendered>();
   /** our node -> the page node it stands in for */
   private links = new WeakMap<Element, Element>();
@@ -57,7 +58,6 @@ export class Controller {
   private enable() {
     if (this.active) return;
     this.active = true;
-    this.io = new IntersectionObserver((entries) => this.onIntersect(entries), { rootMargin: '1200px 0px' });
     this.observer.start(document.body);
     this.urlTimer = setInterval(() => {
       if (location.href !== this.lastUrl) {
@@ -72,8 +72,7 @@ export class Controller {
     if (!this.active) return;
     this.active = false;
     this.observer.stop();
-    this.io?.disconnect();
-    this.io = null;
+    this.lazy.disconnect();
     this.queue.clear();
     if (this.urlTimer) clearInterval(this.urlTimer);
     this.restoreAll();
@@ -212,20 +211,16 @@ export class Controller {
   }
 
   private enqueue(el: Element, immediate: boolean) {
-    if (immediate || !this.io) {
+    if (immediate) {
       this.queue.add(el);
       this.drain();
     } else {
-      this.io.observe(el);
+      this.lazy.observe(el);
     }
   }
 
-  private onIntersect(entries: IntersectionObserverEntry[]) {
-    for (const e of entries) {
-      if (!e.isIntersecting) continue;
-      this.io?.unobserve(e.target);
-      this.queue.add(e.target);
-    }
+  private onVisible(els: Element[]) {
+    for (const el of els) this.queue.add(el);
     this.drain();
   }
 
@@ -238,11 +233,14 @@ export class Controller {
         const el = this.queue.values().next().value as Element;
         this.queue.delete(el);
         if (!el.isConnected) continue;
+        const t0 = performance.now();
         try {
-          if (el.matches(UNIT_SELECTOR)) await this.processKatex(el);
-          else await this.processRaw(el);
+          // A single formula must never stall the queue (e.g. a font chunk that never loads).
+          await withTimeout(el.matches(UNIT_SELECTOR) ? this.processKatex(el) : this.processRaw(el), ITEM_TIMEOUT_MS);
+          debug('processed', el.matches(UNIT_SELECTOR) ? 'katex' : 'raw', Math.round(performance.now() - t0), 'ms', this.queue.size, 'left');
         } catch (e) {
           console.warn('[ALR] processing failed', e);
+          if ((e as Error)?.message === 'timeout') this.recordError(getTexSource(el) ?? el.textContent?.slice(0, 80) ?? '', `渲染超时（>${ITEM_TIMEOUT_MS / 1000}s）`, 'katex');
         }
         if (performance.now() - slice > 30) {
           await new Promise((r) => setTimeout(r, 0)); // keep the page responsive
@@ -370,8 +368,7 @@ export class Controller {
       document.querySelectorAll('alr-math, alr-text').forEach((el) => el.remove());
       document.querySelectorAll(ATTRS.map((a) => `[${a}]`).join(',')).forEach((el) => ATTRS.forEach((a) => el.removeAttribute(a)));
     });
-    this.io?.disconnect();
-    if (this.active) this.io = new IntersectionObserver((entries) => this.onIntersect(entries), { rootMargin: '1200px 0px' });
+    this.lazy.disconnect();
     this.queue.clear();
   }
 
@@ -419,6 +416,27 @@ export class Controller {
     const { createBrowserEngine } = await loadEngineModule();
     const engine = createBrowserEngine({ macros: parsed.macros, physicsOverridesStandard: this.settings.physicsOverridesStandard });
     return engine.validateMacros(Object.keys(parsed.macros));
+  }
+}
+
+const ITEM_TIMEOUT_MS = 8000;
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('timeout')), ms);
+    p.then(
+      (v) => (clearTimeout(t), resolve(v)),
+      (e) => (clearTimeout(t), reject(e)),
+    );
+  });
+}
+
+/** Diagnostics, off by default: run `localStorage.setItem('alr-debug', '1')` in the page console. */
+function debug(...args: unknown[]) {
+  try {
+    if (localStorage.getItem('alr-debug') === '1') console.debug('[ALR]', ...args);
+  } catch {
+    /* storage blocked */
   }
 }
 
