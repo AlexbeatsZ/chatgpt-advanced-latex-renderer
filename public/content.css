@@ -9,6 +9,12 @@ alr-text {
   display: inline;
 }
 
+/* ```latex code block preview: one formula per line */
+alr-math[data-alr-src='codeblock'] alr-text.alr-line {
+  display: block;
+  margin: 0.35em 0;
+}
+
 alr-math {
   color: inherit;
   line-height: normal;

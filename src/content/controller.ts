@@ -9,7 +9,10 @@ import type { FormulaError, Status } from '../shared/messages';
 import { parseMacros } from '../tex/macros';
 import { preprocessTex } from '../tex/preprocess';
 import type { MathSegment, ScanOptions } from '../tex/delimiters';
-import { detectFailure, findRenderedUnits, getTexSource, isDisplayUnit, usesPreferred, UNIT_SELECTOR } from '../dom/katex';
+import {
+  detectFailure, findPreviewErrors, findRenderedUnits, getCodeBlockSource, getTexSource, isDisplayUnit, usesPreferred, UNIT_SELECTOR,
+} from '../dom/katex';
+import { splitLatexSnippet } from '../tex/snippet';
 import { authorOf, messageRoots } from '../dom/scope';
 import {
   applyBlock, collectText, findRawBlocks, forgetDetached, isUpToDate, restoreAllBlocks, restoreBlock, scanBlock, stateOf, BLOCK_SELECTOR,
@@ -35,6 +38,8 @@ export class Controller {
   private cache = new Map<string, Rendered>();
   /** our node -> the page node it stands in for */
   private links = new WeakMap<Element, Element>();
+  /** failed ```latex code-block previews (see findPreviewErrors) */
+  private previews = new WeakSet<Element>();
   private queue = new Set<Element>();
   private draining = false;
   private errors: FormulaError[] = [];
@@ -176,6 +181,10 @@ export class Controller {
     const opts = this.scanOptions();
     for (const root of roots) {
       for (const unit of findRenderedUnits(root)) this.considerKatex(unit);
+      for (const unit of findPreviewErrors(root)) {
+        this.previews.add(unit);
+        this.considerKatex(unit);
+      }
       if (this.settings.scanRawText) for (const block of findRawBlocks(root)) this.considerRaw(block, opts);
     }
     this.lastPassMs = performance.now() - t0;
@@ -188,16 +197,16 @@ export class Controller {
   private considerKatex(unit: Element) {
     if (unit.hasAttribute('data-alr-hidden')) {
       const ours = unit.nextElementSibling;
-      if (ours && ours.tagName === 'ALR-MATH' && this.links.get(ours) === unit && ours.getAttribute('data-alr-tex') === getTexSource(unit)) return;
+      if (ours && ours.tagName === 'ALR-MATH' && this.links.get(ours) === unit && ours.getAttribute('data-alr-tex') === this.sourceOf(unit)) return;
       this.observer.mutate(() => {
         if (ours && this.links.get(ours) === unit) ours.remove();
         unit.removeAttribute('data-alr-hidden');
       });
     }
-    const tex = getTexSource(unit);
+    const tex = this.sourceOf(unit);
     if (!tex) return;
     if (unit.getAttribute('data-alr-state') === 'error' && unit.getAttribute('data-alr-tex') === tex) return;
-    const want = this.settings.mode === 'full' || detectFailure(unit).failed || usesPreferred(tex, this.preferred);
+    const want = this.previews.has(unit) || this.settings.mode === 'full' || detectFailure(unit).failed || usesPreferred(tex, this.preferred);
     if (want) this.enqueue(unit, false);
   }
 
@@ -236,11 +245,12 @@ export class Controller {
         const t0 = performance.now();
         try {
           // A single formula must never stall the queue (e.g. a font chunk that never loads).
-          await withTimeout(el.matches(UNIT_SELECTOR) ? this.processKatex(el) : this.processRaw(el), ITEM_TIMEOUT_MS);
-          debug('processed', el.matches(UNIT_SELECTOR) ? 'katex' : 'raw', Math.round(performance.now() - t0), 'ms', this.queue.size, 'left');
+          const isUnit = this.previews.has(el) || el.matches(UNIT_SELECTOR);
+          await withTimeout(isUnit ? this.processKatex(el) : this.processRaw(el), ITEM_TIMEOUT_MS);
+          debug('processed', isUnit ? 'formula' : 'raw', Math.round(performance.now() - t0), 'ms', this.queue.size, 'left');
         } catch (e) {
           console.warn('[ALR] processing failed', e);
-          if ((e as Error)?.message === 'timeout') this.recordError(getTexSource(el) ?? el.textContent?.slice(0, 80) ?? '', `渲染超时（>${ITEM_TIMEOUT_MS / 1000}s）`, 'katex');
+          if ((e as Error)?.message === 'timeout') this.recordError(this.sourceOf(el) ?? el.textContent?.slice(0, 80) ?? '', `渲染超时（>${ITEM_TIMEOUT_MS / 1000}s）`, 'katex');
         }
         if (performance.now() - slice > 30) {
           await new Promise((r) => setTimeout(r, 0)); // keep the page responsive
@@ -273,7 +283,11 @@ export class Controller {
     return { em, ex: em / 2, containerWidth: Math.max(200, block.clientWidth || 700) };
   }
 
-  private makeMath(node: HTMLElement, tex: string, display: boolean, source: 'katex' | 'text'): HTMLElement {
+  private sourceOf(unit: Element): string | null {
+    return this.previews.has(unit) ? getCodeBlockSource(unit) : getTexSource(unit);
+  }
+
+  private makeMath(node: HTMLElement, tex: string, display: boolean, source: 'katex' | 'text' | 'codeblock'): HTMLElement {
     const el = document.createElement('alr-math');
     el.setAttribute('data-alr-display', display ? 'block' : 'inline');
     el.setAttribute('data-alr-src', source);
@@ -290,14 +304,15 @@ export class Controller {
   }
 
   private async processKatex(unit: Element) {
-    const tex = getTexSource(unit);
+    const tex = this.sourceOf(unit);
     if (!tex || unit.hasAttribute('data-alr-hidden')) return;
-    const display = isDisplayUnit(unit);
-    const r = await this.render(tex, display, unit);
-    if (!unit.isConnected || getTexSource(unit) !== tex) return; // changed while rendering
+    const preview = this.previews.has(unit);
+    const display = preview || isDisplayUnit(unit);
+    const r = preview ? await this.renderSnippet(tex, unit) : await this.render(tex, display, unit);
+    if (!unit.isConnected || this.sourceOf(unit) !== tex) return; // changed while rendering
     this.observer.mutate(() => {
       if (r.ok) {
-        const el = this.makeMath(r.node, tex, display, 'katex');
+        const el = preview ? r.node : this.makeMath(r.node, tex, display, 'katex');
         unit.after(el);
         this.links.set(el, unit);
         unit.setAttribute('data-alr-hidden', '');
@@ -310,6 +325,38 @@ export class Controller {
         this.recordError(tex, r.error, 'katex');
       }
     });
+  }
+
+  /** A ```latex code block: one display formula per chunk, stacked in a single <alr-math>. */
+  private async renderSnippet(src: string, ctx: Element): Promise<Rendered> {
+    const chunks = splitLatexSnippet(src);
+    const results = [];
+    for (const c of chunks) results.push({ tex: c, r: await this.render(c, true, ctx) });
+    if (!results.some((x) => x.r.ok)) {
+      const first = results.find((x) => !x.r.ok)?.r as { error: string } | undefined;
+      return { ok: false, error: first?.error ?? '代码块中没有可渲染的公式' };
+    }
+    const host = this.makeMath(document.createElement('span'), src, true, 'codeblock');
+    host.firstChild!.remove(); // drop the placeholder, keep the copy-source span
+    const copy = host.firstChild!;
+    for (const { tex, r } of results) {
+      const line = document.createElement('alr-text');
+      line.className = 'alr-line';
+      // inline too: content.css is cached by the browser until the extension is reloaded
+      line.style.display = 'block';
+      line.style.margin = '0.35em 0';
+      if (r.ok) {
+        r.node.setAttribute('aria-label', tex);
+        line.appendChild(r.node);
+      } else {
+        line.classList.add('alr-raw-error');
+        line.title = `LaTeX 错误: ${r.error}`;
+        line.textContent = tex;
+        this.recordError(tex, r.error, 'katex');
+      }
+      host.insertBefore(line, copy);
+    }
+    return { ok: true, node: host };
   }
 
   private async processRaw(block: Element) {
@@ -355,7 +402,7 @@ export class Controller {
   private gc() {
     forgetDetached();
     const orphans: Element[] = [];
-    document.querySelectorAll('alr-math[data-alr-src="katex"]').forEach((el) => {
+    document.querySelectorAll('alr-math[data-alr-src="katex"], alr-math[data-alr-src="codeblock"]').forEach((el) => {
       const orig = this.links.get(el);
       if (!orig || !orig.isConnected || orig.nextElementSibling !== el) orphans.push(el);
     });
@@ -399,7 +446,7 @@ export class Controller {
       mode: this.settings.mode,
       counts: {
         katexSeen: units.length,
-        upgraded: document.querySelectorAll('alr-math[data-alr-src="katex"]').length,
+        upgraded: document.querySelectorAll('alr-math[data-alr-src="katex"], alr-math[data-alr-src="codeblock"]').length,
         rawRendered: document.querySelectorAll('alr-math[data-alr-src="text"]').length,
         errors: this.errors.length,
         noSource: units.filter((u) => !getTexSource(u)).length,

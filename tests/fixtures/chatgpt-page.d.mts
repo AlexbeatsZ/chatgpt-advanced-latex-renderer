@@ -8,3 +8,4 @@ export function table(rows: string[][]): string;
 export function assistantTurn(n: number, blocks: string[]): string;
 export function userTurn(n: number, plain: string): string;
 export function page(turns: string[], opts?: { dark?: boolean; innerScroll?: boolean }): string;
+export function latexCodeBlock(src: string, opts?: { ok?: boolean }): string;

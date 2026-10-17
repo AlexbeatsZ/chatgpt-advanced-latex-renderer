@@ -30,6 +30,18 @@ export function codeBlock(code, lang = 'python') {
   return `<div class="relative"><div class="InlineCodePane-EYx4bd"><div data-editor-search-surface="true"><div class="cm-editor ͼ1 ͼ2"><div class="cm-scroller"><div class="cm-content" contenteditable="true" role="textbox" data-language="${lang}">${lines}</div></div></div></div></div></div>`;
 }
 
+/**
+ * ```latex code block with ChatGPT's preview. `ok` = preview rendered by KaTeX; otherwise the
+ * preview is the "LaTeX 代码无效" alert (observed when KaTeX fails, e.g. on \ce).
+ */
+export function latexCodeBlock(src, { ok = false } = {}) {
+  const preview = ok
+    ? `<div>${k(src, true)}</div>`
+    : `<div class="PreviewError-_CR6f8"><aside role="alert" class="alert"><div aria-hidden="true"></div><div><div><div class="flex"><div class="flex"><div>LaTeX 代码无效</div></div></div></div></div></aside></div>`;
+  const attr = src.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  return `<div data-code-block="true" data-source-visible="false" data-markdown-copy="code-block" data-markdown-copy-text="${attr}" data-theme="dark"><div data-markdown-copy=""><div>LaTeX</div><button type="button">显示源代码</button></div><div data-code-block-source="" style="display:none"></div><div data-code-block-preview="" data-markdown-copy="">${preview}</div></div>`;
+}
+
 export const list = (items) => `<ul>${items.map((i) => `<li>${i}</li>`).join('')}</ul>`;
 export const table = (rows) =>
   `<table><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;

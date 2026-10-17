@@ -100,6 +100,32 @@ export function detectFailure(unit: Element): FailureInfo {
   return { failed, commands: [...commands] };
 }
 
+/**
+ * ChatGPT renders ```latex code blocks with a preview; when its renderer fails, the preview is an
+ * alert ("LaTeX 代码无效") and the source survives only in the code block. Returns the direct
+ * child of `[data-code-block-preview]` that holds the alert (the element we hide).
+ */
+export function findPreviewErrors(root: ParentNode): Element[] {
+  const out: Element[] = [];
+  root.querySelectorAll('[data-code-block-preview] aside[role="alert"]').forEach((aside) => {
+    const preview = aside.closest('[data-code-block-preview]')!;
+    let unit: Element = aside;
+    while (unit.parentElement && unit.parentElement !== preview) unit = unit.parentElement;
+    if (!unit.closest(OWN_SELECTOR)) out.push(unit);
+  });
+  return out;
+}
+
+/** Source of the code block a preview belongs to, if it looks like a LaTeX math snippet. */
+export function getCodeBlockSource(unit: Element): string | null {
+  const block = unit.closest('[data-code-block]');
+  if (!block) return null;
+  const src = block.getAttribute('data-markdown-copy-text') ?? block.querySelector('[data-code-block-source] .cm-content')?.textContent ?? null;
+  if (!src || !/\\[a-zA-Z]/.test(src)) return null;
+  if (/\\documentclass|\\begin\{document\}|\\usepackage/.test(src)) return null; // whole documents: out of scope
+  return src;
+}
+
 /** True if the TeX uses any command from `preferred` (names without backslash). */
 export function usesPreferred(tex: string, preferred: ReadonlySet<string>): boolean {
   if (!preferred.size) return false;

@@ -16,4 +16,10 @@ export const REAL_FORMULAS: { tex: string; display: boolean }[] = [
   { tex: '\\ce{H2 + I2 -> 2HI}', display: false },
   { tex: "r=\\dfrac{k[\\ce{H2}][\\ce{Br2}]^{1/2}}{1+k'[\\ce{HBr}]/[\\ce{Br2}]}", display: false },
   { tex: 'r=k[\\ce{H2}][\\ce{Cl2}]^{1/2}', display: false },
+  // from ```latex code blocks whose ChatGPT preview failed ("LaTeX 代码无效")
+  { tex: '\\ce{MnO4^- + 8H+ + 5e- -> Mn^2+ + 4H2O}', display: true },
+  { tex: '\\ce{Fe^3+ + e- <=> Fe^2+}', display: true },
+  { tex: '\\pu{-285.8 kJ mol-1}', display: true },
+  { tex: '\\comm{A}{B}', display: true },
+  { tex: '\\qty(\\frac{a}{b})', display: true },
 ];

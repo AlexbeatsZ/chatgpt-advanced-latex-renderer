@@ -57,6 +57,8 @@ const mainTurns = [
     F.list([F.text('列表项 $\\alpha$'), F.text('嵌套 \\(\\beta\\)') + F.list([F.text('更深 $\\gamma$')])]),
     F.table([[F.text('$\\Delta H$'), F.text('\\(\\pu{-285.8 kJ mol-1}\\)')], ['普通', F.text('$5 and $6')]]),
     F.para(F.text('中文与 English 混排：速率常数 $k = A\\,\\mathrm{e}^{-E_a/RT}$。')),
+    // ```latex block whose ChatGPT preview failed (source verbatim from chatgpt.com)
+    F.latexCodeBlock('% 酸性条件下高锰酸根的还原半反应\n\\ce{MnO4^- + 8H+ + 5e- -> Mn^2+ + 4H2O}\n\n% Fe3+/Fe2+ 电对\n\\ce{Fe^3+ + e- <=> Fe^2+}\n\n% 标准反应焓示例\n\\pu{-285.8 kJ mol-1}'),
   ]),
 ];
 addPage('main', mainTurns);
@@ -234,6 +236,15 @@ await test('compat mode: only failed/preferred formulas upgraded, raw text rende
   assert(r.composer.includes('$x^2$ draft'), 'composer changed');
   eq(r.missingGlyphs, 0, 'missing glyphs in SVG');
   eq(r.errors, [], 'render errors');
+  const cb = await page.evaluate(() => {
+    const m = document.querySelector('alr-math[data-alr-src="codeblock"]');
+    return {
+      lines: m ? m.querySelectorAll('alr-text.alr-line mjx-container').length : -1,
+      alertHidden: document.querySelector('[data-code-block-preview] > [data-alr-hidden] aside[role=alert]') !== null,
+      insidePreview: !!m?.parentElement?.hasAttribute('data-code-block-preview'),
+    };
+  });
+  eq(cb, { lines: 3, alertHidden: true, insidePreview: true }, 'failed ```latex preview replaced by MathJax (3 formulas)');
   await page.screenshot({ path: path.join(outDir, 'compat-light.png'), fullPage: true });
 });
 
