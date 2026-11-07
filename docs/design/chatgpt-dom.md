@@ -15,6 +15,8 @@
    - 行内：`span[data-d-component=math][data-d-stream-inline] > span.katex`
    - 块级：`div[data-d-component=math][data-d-block] > span.katex-display > span.katex`
    - 每个 `.katex` 内都有 `annotation[encoding="application/x-tex"]`，即原始 TeX（159/159 均有）。
+   - 2026-11 补充（未亲自观察，来自开源项目 ophel 的记录）：新版改为 `span[role=math][data-math-source][data-client-katex-layout]`
+     包着只有 HTML 输出的 KaTeX（无 MathML/annotation）。已按“源码属性包装元素”处理，见 [sites.md](sites.md)。
 4. KaTeX 不认识的命令**不会**生成 `.katex-error`，而是把命令名渲染成红字并继续排版剩余部分：
    - MathML 侧：`mstyle[mathcolor="#cc0000"]`，文本为 `\ce`
    - HTML 侧：`span.mord[style="color: rgb(204, 0, 0)"]`

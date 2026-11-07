@@ -3,11 +3,34 @@
 [![CI](https://github.com/AlexbeatsZ/chatgpt-advanced-latex-renderer/actions/workflows/ci.yml/badge.svg)](https://github.com/AlexbeatsZ/chatgpt-advanced-latex-renderer/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/AlexbeatsZ/chatgpt-advanced-latex-renderer)](https://github.com/AlexbeatsZ/chatgpt-advanced-latex-renderer/releases)
 
-Chrome / Edge（Manifest V3）扩展：在 chatgpt.com 上用**本地打包的 MathJax 4** 增强 LaTeX 渲染，重点支持
-mhchem 化学式（`\ce`、`\pu`）、physics 宏包、AMS 环境和自定义宏。不修改 ChatGPT 生成的内容，不上传任何数据。
+Chrome / Edge（Manifest V3）扩展与油猴脚本：在 ChatGPT、Claude、Gemini 等 AI 对话网站上用**本地打包的 MathJax 4**
+增强 LaTeX 渲染，重点支持 mhchem 化学式（`\ce`、`\pu`）、physics 宏包、AMS 环境和自定义宏。不修改模型生成的内容，不上传任何数据。
 
-ChatGPT 自带的 KaTeX 不认识 `\ce` 等命令：要么把命令名显示成红字、其余内容乱排，要么在 ```latex 代码块
-预览中显示“LaTeX 代码无效”，题目卡片里的公式则干脆不渲染。本扩展从页面里恢复原始 LaTeX，交给 MathJax 重新排版。
+这些网站自带的 KaTeX 大多不认识 `\ce` 等命令：要么把命令名显示成红字、其余内容乱排，要么在 ```latex 代码块
+预览中显示“LaTeX 代码无效”，部分公式则干脆以原文显示。本扩展从页面里恢复原始 LaTeX，交给 MathJax 重新排版。
+
+## 支持的网站
+
+| 网站 | 地址 | 消息识别 |
+|---|---|---|
+| ChatGPT | chatgpt.com、chat.openai.com | ✅ 已在真实页面验证（0.2.x） |
+| Claude | claude.ai | 专用选择器 |
+| Gemini | gemini.google.com、business.gemini.google | 专用选择器（`data-math` 源码） |
+| Google AI Studio | aistudio.google.com | 专用选择器 |
+| NotebookLM | notebooklm.google.com | 专用选择器 |
+| DeepSeek | chat.deepseek.com | 专用选择器 |
+| Grok | grok.com | 专用选择器 |
+| Kimi | kimi.com、kimi.moonshot.cn | 专用选择器 |
+| 豆包 | doubao.com | 专用选择器 |
+| Qwen Chat / 通义千问 | chat.qwen.ai、qianwen.com、tongyi.com | 专用选择器 |
+| 腾讯元宝 | yuanbao.tencent.com | 专用选择器 |
+| 智谱清言 / Z.ai | chatglm.cn、chat.z.ai | 专用选择器 |
+| Perplexity、Microsoft Copilot、Poe | perplexity.ai、copilot.microsoft.com、poe.com | 专用选择器 |
+| Le Chat、LMArena、HuggingChat、OpenRouter、秘塔、MiniMax | chat.mistral.ai、lmarena.ai、huggingface.co/chat、openrouter.ai/chat、metaso.cn、minimax | 通用（整页扫描） |
+
+“专用选择器”只用于缩小扫描范围、区分你自己的消息；网站改版导致选择器失效时自动退回整页扫描，公式照样渲染。
+已渲染公式通过 KaTeX 的 MathML 注释或 `data-math` / `data-math-source` 等属性恢复源码。站点列表集中在
+[src/sites/sites.ts](src/sites/sites.ts)，manifest 与脚本的 `@match` 由它生成；可以在弹出界面里对单个网站关闭。
 
 ## 安装（开发者模式）
 
@@ -25,9 +48,9 @@ ChatGPT 自带的 KaTeX 不认识 `\ce` 等命令：要么把命令名显示成�
    ```
 2. 打开 `chrome://extensions`（Edge：`edge://extensions`），开启“开发者模式”。
 3. “加载已解压的扩展程序” → 选择本项目的 `dist` 文件夹。
-4. 打开或刷新 chatgpt.com。
+4. 打开或刷新上面列出的任一网站。
 
-更新代码后重新 `pnpm build`，然后在扩展页点该扩展的“重新加载”并刷新 ChatGPT 页面（`manifest.json` 与
+更新代码后重新 `pnpm build`，然后在扩展页点该扩展的“重新加载”并刷新网页（`manifest.json` 与
 `content.css` 只在重新加载扩展时更新）。最低版本 Chrome / Edge 120。
 
 ## 油猴脚本版本
@@ -36,7 +59,7 @@ ChatGPT 自带的 KaTeX 不认识 `\ce` 等命令：要么把命令名显示成�
 
 1. 安装 [Tampermonkey](https://www.tampermonkey.net/) 或 Violentmonkey。Chrome 138+ 的 Tampermonkey 需要在其扩展详情页打开“允许用户脚本”。
 2. 打开 [chatgpt-advanced-latex-renderer.user.js](https://github.com/AlexbeatsZ/chatgpt-advanced-latex-renderer/releases/latest/download/chatgpt-advanced-latex-renderer.user.js) 并点“安装”。之后会自动检查更新。
-3. 设置：在 ChatGPT 页面点油猴图标 → “⚙ Advanced LaTeX 设置”（页内面板，和扩展弹出界面相同）。
+3. 设置：在支持的网站上点油猴图标 → “⚙ Advanced LaTeX 设置”（页内面板，和扩展弹出界面相同）。
 
 与扩展的区别：脚本（约 1.9 MB，未压缩、可审阅）内置 MathJax 和基础字体；遇到基础字体之外的字形（如
 `\mathfrak`、`\mathscr`、西里尔字母）时，按需从 jsDelivr（失败则 GitHub raw）下载对应字形区段的**纯数据 JSON**，
@@ -47,15 +70,15 @@ ChatGPT 自带的 KaTeX 不认识 `\ce` 等命令：要么把命令名显示成�
 
 | 功能 | 说明 |
 |---|---|
-| 兼容增强模式（默认） | 保留 ChatGPT 已正确渲染的公式；只把 KaTeX 失败的（红字、解析错误）或使用指定命令（默认 `\ce \pu \bra \ket \braket` 与所有自定义宏）的公式换成 MathJax |
+| 兼容增强模式（默认） | 保留网页已正确渲染的公式；只把 KaTeX 失败的（红字、解析错误）或使用指定命令（默认 `\ce \pu \bra \ket \braket` 与所有自定义宏）的公式换成 MathJax |
 | 完整 MathJax 模式 | 所有能恢复源码的公式统一用 MathJax，保持行内/块级语义 |
 | 关闭 | 删除扩展添加的全部节点与属性，页面恢复原样（测试验证与原始 DOM 完全一致） |
-| 原文公式 | 渲染页面没渲染的 `$…$`、`\(…\)`、`\[…\]`、`$$…$$`、裸 `\begin{align}…`（ChatGPT 不渲染单美元公式；题目卡片中的公式也是原文） |
+| 原文公式 | 渲染页面没渲染的 `$…$`、`\(…\)`、`\[…\]`、`$$…$$`、裸 `\begin{align}…`（如 ChatGPT 不渲染单美元公式，题目卡片中的公式也是原文） |
 | ```latex 代码块 | 预览失败（“LaTeX 代码无效”）时，从代码块源码恢复，按空行逐个渲染；“显示源代码”不受影响 |
 | 动态页面 | MutationObserver 批处理（150 ms 防抖、最长 700 ms），流式输出中完整的公式逐步出现，未闭合的保持原样 |
 | 懒渲染 | 只渲染滚动容器视口上下约 1200 px 内的公式，长对话不卡顿 |
 | 复制 | 选中文字复制（Ctrl+C）时每个公式恰好出现一次：行内 `$…$`、独立 `$$…$$`；Alt+单击公式复制 LaTeX 源码（MathJax 与原生 KaTeX 均可） |
-| 弹出界面 | 开关、模式、重新渲染、引擎状态与错误列表、字号、自定义宏（保存时校验）、高级选项 |
+| 弹出界面 | 全局开关与“在此网站启用”、模式、重新渲染、引擎状态与错误列表、字号、自定义宏（保存时校验）、高级选项 |
 
 ## 支持的命令（MathJax 已实现的部分）
 
@@ -93,8 +116,8 @@ ChatGPT 自带的 KaTeX 不认识 `\ce` 等命令：要么把命令名显示成�
 
 ## 隐私与权限
 
-只申请 `storage`；内容脚本只匹配 `https://chatgpt.com/*`、`https://chat.openai.com/*`。无网络请求、无遥测、
-无远程代码（e2e 测试拦截所有非 chatgpt.com 请求并断言为零）。详见 [PRIVACY.md](PRIVACY.md)。
+只申请 `storage`；内容脚本只匹配上面列出的 AI 对话网站（不申请“所有网站”权限）。无网络请求、无遥测、
+无远程代码（e2e 测试拦截所有非页面自身的请求并断言为零）。详见 [PRIVACY.md](PRIVACY.md)。
 
 ## 架构
 
@@ -106,7 +129,8 @@ src/content/observer.ts    MutationObserver 批处理 + 自身变更过滤（防
 src/content/lazy.ts        以真实滚动容器为根的 IntersectionObserver
 src/dom/katex.ts           已渲染公式定位、源码恢复、失败检测、代码块预览
 src/dom/rawText.ts         原文公式：文本收集、原位替换与精确还原
-src/dom/scope.ts           消息范围与排除区域（不依赖哈希类名）
+src/sites/sites.ts         支持的网站：域名、消息选择器（生成 manifest matches 与 @match）
+src/dom/scope.ts           按当前网站确定消息范围与排除区域（不依赖哈希类名）
 src/tex/*.ts               定界符扫描、宏解析、冲突预处理、代码块切分（纯函数）
 src/render/engine.ts       MathJax 4（TeX → SVG），浏览器/Node 通用
 src/ui/panel.ts            设置/状态面板（扩展弹出页与脚本页内面板共用）
@@ -114,7 +138,7 @@ src/popup/*                扩展弹出页（面板 + chrome.tabs 消息）
 src/userscript/*           油猴脚本入口、GM 存储、字形 JSON 加载与校验
 ```
 
-设计细节与真实页面观察记录：[docs/design/chatgpt-dom.md](docs/design/chatgpt-dom.md)、[docs/design/mathjax-engine.md](docs/design/mathjax-engine.md)。
+设计细节与真实页面观察记录：[docs/design/chatgpt-dom.md](docs/design/chatgpt-dom.md)、[docs/design/sites.md](docs/design/sites.md)、[docs/design/mathjax-engine.md](docs/design/mathjax-engine.md)。
 
 **DOM 安全原则**：不删除、不移动、不拆分页面（React）节点。KaTeX 公式只加隐藏属性并在旁边插入自己的节点；
 原文公式只改文本节点的内容并记录原值，React 之后改写时检测到差异就先还原再重做。所以代码复制、文本选择、
@@ -132,14 +156,15 @@ pnpm build && pnpm test:e2e
 pnpm build:userscript && pnpm test:userscript
 ```
 
-- 单元测试（Vitest，239 个）：定界符/货币/转义/嵌套括号/未闭合；宏解析；冲突改写；真实 MathJax 编译全部
+- 单元测试（Vitest，256 个）：定界符/货币/转义/嵌套括号/未闭合；宏解析；冲突改写；真实 MathJax 编译全部
   夹具公式（含 20 条取自真实对话的公式），并断言无缺字形；jsdom 上的提取、原位替换与还原、代码块预览；
   油猴脚本的字形 JSON 路径（全部公式重新渲染、篡改拒绝、镜像回退、缓存）。
-- 油猴脚本端到端（7 个）：真实 Chromium 中注入构建出的 `.user.js`（GM_* 垫片代替 Tampermonkey），字体主机请求被拦截：
-  渲染结果、缓存后离线、jsDelivr 故障回退、篡改数据被拒绝、页内面板与开关、与扩展共存、无多余请求。
-- 端到端（Playwright + 真实 Chromium + 构建产物，15 个）：在 `https://chatgpt.com/` 域名下用**模拟页面**
+- 油猴脚本端到端（8 个）：真实 Chromium 中注入构建出的 `.user.js`（GM_* 垫片代替 Tampermonkey），字体主机请求被拦截：
+  渲染结果、缓存后离线、jsDelivr 故障回退、篡改数据被拒绝、页内面板与开关、Gemini 式 Trusted Types 页面、与扩展共存、无多余请求。
+- 端到端（Playwright + 真实 Chromium + 构建产物，20 个）：在 `https://chatgpt.com/` 域名下用**模拟页面**
   （按真实结构复刻，KaTeX 由真实 KaTeX 生成）测试注入、两种模式、关闭恢复、刷新后状态、深色模式、
-  基线与字号、流式、React 式重渲染、题目单选交互、选择复制、Alt+单击、长对话性能、内部滚动容器预渲染、无外部请求。
+  基线与字号、流式、React 式重渲染、题目单选交互、选择复制、Alt+单击、长对话性能、内部滚动容器预渲染、无外部请求；
+  另有模拟的 Claude（禁止 `<style>` 的 CSP）、Gemini（Trusted Types、`data-math`）、DeepSeek、ChatGPT 新版 `data-math-source` 页面与按网站开关。
 
 CI（GitHub Actions，Ubuntu）在每次推送到 `main` 时运行类型检查、单元测试、构建、扩展与脚本的端到端测试，
 并确认提交的字形 JSON 与重新生成的一致，上传未打包扩展、脚本与截图。发布：把 `public/manifest.json` 与
@@ -158,6 +183,7 @@ CI（GitHub Actions，Ubuntu）在每次推送到 `main` 时运行类型检查�
 | 油猴脚本在真实 Tampermonkey + 真实 chatgpt.com | ⚠️ 未验证（逻辑与扩展共用，已在 GM 垫片 + 模拟页上测试） |
 | 消息编辑、分支切换、分享页、移动端 | ⚠️ 未在真实页面专门测试（逻辑上不触碰页面节点） |
 | 浅色模式真实页面 | ⚠️ 只在模拟页验证（SVG 使用 currentColor） |
+| ChatGPT 以外的网站（0.3.0） | ⚠️ 只在模拟页验证：选择器取自活跃维护的开源多站点项目，并有整页扫描兜底；尚未在各真实网站逐一验收 |
 
 ## 已知限制与与完整 LaTeX 的差异
 
@@ -169,8 +195,8 @@ CI（GitHub Actions，Ubuntu）在每次推送到 `main` 时运行类型检查�
 - 原文中 `\(...\)` 这类只有省略号的“讲解语法”文字故意不渲染；单美元采用 pandoc 规则排除货币。
 - 首次需要 MathJax 时要加载约 1.5 MB 引擎（本地，约 100 ms 级主线程占用）。
 - 扩展声明了可访问资源，网站可以探测到扩展存在（不含个人数据）。
-- 依赖 ChatGPT 的 DOM 语义属性（`data-content-search-unit-key`、`data-code-block` 等，已有多重回退）；
-  ChatGPT 改版后可能需要更新 `src/dom/scope.ts` 和 `katex.ts`。`scripts/probe-chatgpt.mjs` 与
+- 依赖各网站的 DOM 语义属性（如 ChatGPT 的 `data-content-search-unit-key`、`data-code-block`，已有多重回退）；
+  网站改版后可能需要更新 `src/sites/sites.ts` 和 `src/dom/katex.ts`。只输出 HTML、页面上又没有源码属性的 KaTeX 无法恢复源码，保持原样。`scripts/probe-chatgpt.mjs` 与
   `tests/real/` 用于重新研究页面。
 
 ## 许可证
