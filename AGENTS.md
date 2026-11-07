@@ -7,7 +7,7 @@ TeX（annotation 优先，绝不反推）；流式、长对话、内部导航兼
 弹出界面含开关、模式、重新渲染、状态与错误、字号、自定义宏。
 
 ## Current State
-- 版本 0.3.0（多站点），分支 main，远端公开仓库 https://github.com/AlexbeatsZ/chatgpt-advanced-latex-renderer 。
+- 版本 0.3.0（多站点，2026-11-07 已发布 https://github.com/AlexbeatsZ/chatgpt-advanced-latex-renderer/releases/tag/v0.3.0 ，CI/Release 通过），分支 main，远端公开仓库 https://github.com/AlexbeatsZ/chatgpt-advanced-latex-renderer 。
   CI（`.github/workflows/ci.yml`）每次推送 main 跑 typecheck/单元/扩展与脚本构建/e2e；`release.yml` 在 `v*` 标签上校验版本并发布扩展 zip、`.user.js` 和 `.meta.js`。
 - 已实现：KaTeX 失败/偏好命令升级、完整模式、原文公式原位渲染（含题目卡片 label）、```latex 代码块预览失败恢复、
   懒渲染（真实滚动容器为根）、批处理观察器、关闭精确还原、选择复制/Alt+单击复制、弹出界面、调试日志
@@ -18,7 +18,9 @@ TeX（annotation 优先，绝不反推）；流式、长对话、内部导航兼
 - 油猴版：约 1.94 MiB，内置引擎与基础字形；额外字形为固定版本 JSON（40 个区段），下载后校验哈希并缓存，不执行远程代码。两种版本以 DOM 标记互斥。
 - 设备：Mac 项目 `/Users/meta/Project/Workspaces/chatgpt-advanced-latex-renderer`（Mac 无 Playwright 浏览器，e2e 在 OMEN 跑）；
   OMEN 项目 `C:\Users\Meta\Project\Workspaces\chatgpt-latex-renderer`（注意目录名不同），其 Chrome 默认配置以“加载已解压”方式加载该目录的 `dist/`，
-  有 Playwright chromium-1208；ROG 无项目副本，Chrome 装的是 Tampermonkey（id `gcalenpjmijncebpfijmoaglllgpjagf`），用油猴版。
+  有 Playwright chromium-1208，2026-11-07 已更新到 0.3.0 并构建（Chrome 需在扩展页“重新加载”才会用新 manifest）。
+  ROG 2026-11-07 前没有任何安装（Tampermonkey `gcalenpjmijncebpfijmoaglllgpjagf` 里无本脚本、无解压扩展）；已克隆到
+  `C:\Users\Meta\Project\Workspaces\chatgpt-advanced-latex-renderer` 并构建 `dist/`，等用户在 Chrome 里加载或从 Release 安装油猴脚本。
 - 已知待确认：代码块多行公式改为内联 `display:block` 后未在真实页复看；Edge 未实测；真实 Tampermonkey 未验收。
 - 恢复入口：`pnpm install && pnpm build`，Chrome 加载 `dist/`（内容脚本主模块运行时读盘，改代码后刷新页面即可；改 manifest/content.css 需在扩展页重新加载）。
 
