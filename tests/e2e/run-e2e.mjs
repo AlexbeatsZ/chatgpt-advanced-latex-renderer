@@ -96,7 +96,8 @@ addPage('long-inner', longTurns, { innerScroll: true });
 // Other sites, each with the kind of security headers the real site sends (strict CSP on
 // claude.ai, Trusted Types on Google properties).
 const sitePages = {
-  'claude.ai': { html: S.claude(), headers: { 'content-security-policy': "script-src 'self'; style-src 'self'" } },
+  // <style> elements blocked (style attributes stay allowed: the page's own KaTeX needs them).
+  'claude.ai': { html: S.claude(), headers: { 'content-security-policy': "script-src 'self'; style-src-elem 'self'; style-src-attr 'unsafe-inline'" } },
   'gemini.google.com': { html: S.gemini(), headers: { 'content-security-policy': "require-trusted-types-for 'script'" } },
   'chat.deepseek.com': { html: S.deepseek(), headers: {} },
 };
@@ -604,10 +605,8 @@ const siteState = (page) =>
     hidden: document.querySelectorAll('[data-alr-hidden]').length,
     missingGlyphs: [...document.querySelectorAll('alr-math svg text')].filter((t) => !t.textContent || /[\uE000-\uF8FF]/.test(t.textContent)).length,
     styled: [...document.querySelectorAll('alr-math[data-alr-display="block"]')].every((m) => getComputedStyle(m).display === 'block'),
-    mjxStyled: (() => {
-      const c = document.querySelector('alr-math mjx-container');
-      return !c || getComputedStyle(c).getPropertyValue('direction') !== '' ;
-    })(),
+    // MathJax's stylesheet sets overflow:visible on its <svg> (UA default for inner svg: hidden).
+    mjxStyled: [...document.querySelectorAll('alr-math mjx-container > svg')].every((v) => getComputedStyle(v).overflow === 'visible'),
     csp: window.__csp,
     runtime: document.documentElement.getAttribute('data-alr-runtime'),
     composer: document.getElementById('composer').innerHTML,
@@ -621,10 +620,11 @@ await test('Claude (strict CSP): failed \\ce upgraded, user message untouched, r
   eq(r.tex.sort(), ['katex:\\ce{2H2 + O2 -> 2H2O}', 'katex:\\pu{-285.8 kJ mol-1}', 'text:\\ce{NaCl}'].sort(), 'rendered formulas');
   eq(r.missingGlyphs, 0, 'missing glyphs');
   assert(r.styled, 'content.css applies despite style-src CSP');
+  assert(r.mjxStyled, 'MathJax stylesheet applied despite blocked <style> (constructed-sheet fallback)');
+  eq(r.csp.filter((x) => !x.startsWith('style-src-elem') || !x.includes('inline')), [], 'unexpected CSP violations');
   const userText = await page.textContent('[data-testid="user-message"]');
   assert(userText.includes('$\\ce{H2O}$'), 'user message left as typed');
   eq(r.composer, '$x^2$ draft', 'composer untouched');
-  console.log(`   CSP reports: ${JSON.stringify(r.csp)}`);
 });
 
 await test('Gemini (Trusted Types): HTML-only KaTeX with data-math is upgraded, no TT violations', async () => {
