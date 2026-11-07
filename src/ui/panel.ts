@@ -6,13 +6,14 @@
 import type { Settings } from '../shared/settings';
 import { parseMacros } from '../tex/macros';
 import type { Status, ValidateResult } from '../shared/messages';
+import { buildFragment } from './html';
 
 export type PanelStatus = Status | { inactiveBecause: string } | null;
 
 export interface PanelApi {
   load(): Promise<Settings>;
   save(patch: Partial<Settings>): Promise<Settings>;
-  /** null: no controller reachable (extension popup on a non-ChatGPT tab). */
+  /** null: no controller reachable (extension popup on an unsupported tab). */
   status(): Promise<PanelStatus>;
   rerender(): Promise<void>;
   /** null: could not validate in the page. */
@@ -24,8 +25,9 @@ export interface PanelApi {
 export const PANEL_HTML = `
 <header>
   <h1>Advanced LaTeX</h1>
-  <label class="switch" title="启用 / 关闭（关闭后恢复原网页显示）"><input type="checkbox" id="enabled" /><span></span></label>
+  <label class="switch" title="全局启用 / 关闭（关闭后恢复原网页显示）"><input type="checkbox" id="enabled" /><span></span></label>
 </header>
+<label class="check site-row" id="site-row" hidden><input type="checkbox" id="siteEnabled" /> 在 <b id="site-name"></b> 上启用</label>
 <section class="row">
   <div class="seg" role="radiogroup" aria-label="渲染模式">
     <label><input type="radio" name="mode" value="compat" /><span>兼容增强</span></label>
@@ -66,15 +68,16 @@ export const PANEL_HTML = `
 const BOOL_KEYS = ['scanRawText', 'singleDollar', 'userMessages', 'smartBraket', 'siunitx', 'physicsOverridesStandard', 'altClickCopy'] as const;
 
 const MODE_HINT: Record<Settings['mode'], string> = {
-  compat: '保留 ChatGPT 已正确渲染的公式，只把渲染失败（如 \\ce）或使用指定命令的公式交给 MathJax。',
+  compat: '保留网页已正确渲染的公式，只把渲染失败（如 \\ce）或使用指定命令的公式交给 MathJax。',
   full: '所有能恢复 LaTeX 源码的公式统一用 MathJax 渲染。',
 };
 
 /** Renders the panel into `container` (inside `root`). Returns a function that stops polling. */
 export function mountPanel(root: Document | ShadowRoot, container: Element, api: PanelApi): () => void {
-  container.innerHTML = PANEL_HTML;
+  container.replaceChildren(buildFragment(container.ownerDocument, PANEL_HTML));
   const $ = <T extends HTMLElement>(id: string) => root.querySelector(`#${id}`) as T;
   let settings: Settings;
+  let siteId: string | null = null;
 
   const render = () => {
     $<HTMLInputElement>('enabled').checked = settings.enabled;
@@ -85,6 +88,7 @@ export function mountPanel(root: Document | ShadowRoot, container: Element, api:
     for (const k of BOOL_KEYS) $<HTMLInputElement>(k).checked = settings[k];
     if (root.activeElement !== $('macros')) $<HTMLTextAreaElement>('macros').value = settings.macrosText;
     if (root.activeElement !== $('prefer')) $<HTMLInputElement>('prefer').value = settings.preferCommands;
+    if (siteId) $<HTMLInputElement>('siteEnabled').checked = !settings.disabledSites.includes(siteId);
   };
 
   const update = async (patch: Partial<Settings>) => {
@@ -101,11 +105,18 @@ export function mountPanel(root: Document | ShadowRoot, container: Element, api:
     dot.className = 'dot';
     if (!st || 'inactiveBecause' in st) {
       text.textContent = !st
-        ? '当前标签页不是 ChatGPT，或页面需要刷新后才能连接。'
+        ? '当前标签页不是支持的 AI 对话网站，或页面需要刷新后才能连接。'
         : `本页已由${st.inactiveBecause === 'extension' ? '扩展' : '油猴脚本'}版本处理，此版本未启用。`;
-      counts.innerHTML = '';
+      counts.replaceChildren();
       $('errors-box').hidden = true;
+      $('site-row').hidden = true;
       return;
+    }
+    if (st.site && siteId !== st.site.id) {
+      siteId = st.site.id;
+      $('site-name').textContent = st.site.name;
+      $('site-row').hidden = false;
+      render();
     }
     const engineLabel: Record<Status['engine'], string> = {
       idle: '引擎未加载（尚无需要 MathJax 的公式）',
@@ -114,7 +125,11 @@ export function mountPanel(root: Document | ShadowRoot, container: Element, api:
       error: `引擎加载失败：${st.engineError ?? ''}`,
     };
     dot.classList.add(st.engine);
-    text.textContent = st.enabled ? engineLabel[st.engine] : '已关闭（页面保持原样）';
+    text.textContent = st.enabled
+      ? engineLabel[st.engine]
+      : settings.enabled
+        ? '已在此网站关闭（页面保持原样）'
+        : '已关闭（页面保持原样）';
     if (st.mathjaxVersion) $('mj-version').textContent = st.mathjaxVersion;
     const rows: [string, number | string][] = [
       ['页面公式', st.counts.katexSeen],
@@ -176,6 +191,12 @@ export function mountPanel(root: Document | ShadowRoot, container: Element, api:
     $('flavor').textContent = api.flavor;
     render();
     $<HTMLInputElement>('enabled').addEventListener('change', (e) => update({ enabled: (e.target as HTMLInputElement).checked }));
+    $<HTMLInputElement>('siteEnabled').addEventListener('change', (e) => {
+      if (!siteId) return;
+      const on = (e.target as HTMLInputElement).checked;
+      const rest = settings.disabledSites.filter((x) => x !== siteId);
+      update({ disabledSites: on ? rest : [...rest, siteId] });
+    });
     root.querySelectorAll<HTMLInputElement>('input[name=mode]').forEach((r) =>
       r.addEventListener('change', () => update({ mode: r.value as Settings['mode'] })),
     );

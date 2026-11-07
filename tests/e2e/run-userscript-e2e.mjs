@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as F from '../fixtures/chatgpt-page.mjs';
+import * as S from '../fixtures/sites-page.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const headed = process.argv.includes('--headed');
@@ -81,6 +82,11 @@ async function setup() {
       if (fontMode === 'tampered' && url.hostname === 'cdn.jsdelivr.net') body = body.replace('"p":"', '"p":"M0 0L9 9');
       return route.fulfill({ status: 200, body, headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' } });
     }
+    if (url.hostname === 'gemini.google.com') {
+      if (url.pathname.startsWith('/__fixture/')) return route.fulfill({ status: 404, body: '' });
+      // Google properties enforce Trusted Types: innerHTML with a string throws in page scripts.
+      return route.fulfill({ status: 200, body: S.gemini(), headers: { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': "require-trusted-types-for 'script'" } });
+    }
     if (url.hostname === 'chatgpt.com') {
       if (url.pathname.startsWith('/__fixture/')) return route.fulfill({ status: 404, body: '' });
       return route.fulfill({ status: 200, body: pageHtml, headers: { 'content-type': 'text/html; charset=utf-8' } });
@@ -135,7 +141,7 @@ async function test(name, fn) {
     results.push({ name, ok: false, error: e.message });
     console.log(`✗ ${name}\n   ${e.message}`);
   } finally {
-    for (const p of ctx.pages()) if (p.url().startsWith('https://chatgpt.com')) await p.close().catch(() => {});
+    for (const p of ctx.pages()) if (p.url().startsWith('https://')) await p.close().catch(() => {});
   }
 }
 
@@ -234,6 +240,34 @@ await test('settings panel from the menu: mode switch, disable restores the page
   eq(restored, 0, 'all extension changes removed when disabled');
 });
 
+await test('Gemini with Trusted Types: renders, settings panel opens, no TT violations', async () => {
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.addInitScript(() => {
+    window.__csp = [];
+    document.addEventListener('securitypolicyviolation', (e) => window.__csp.push(`${e.violatedDirective} ${e.sourceFile}:${e.lineNumber}`));
+  });
+  await page.goto('https://gemini.google.com/app/1');
+  await page.evaluate(() => localStorage.clear());
+  // evaluate, not addScriptTag: a script tag's text is itself a Trusted Types sink.
+  await page.evaluate(shim + '\n' + script);
+  await settle(page);
+  const tex = await page.evaluate(() => [...document.querySelectorAll('alr-math')].map((m) => m.getAttribute('data-alr-tex')).sort());
+  eq(tex, ['\\ce{A <=> B}', '\\ce{H2O}'], 'upgraded formulas');
+  await page.evaluate(() => window.__menu['⚙ Advanced LaTeX 设置']());
+  await page.waitForTimeout(800);
+  const panel = await page.evaluate(() => {
+    const sr = document.querySelector('alr-panel-host')?.shadowRoot;
+    return { inputs: sr?.querySelectorAll('input').length ?? 0, site: sr?.querySelector('#site-name')?.textContent, siteRowHidden: sr?.querySelector('#site-row')?.hidden };
+  });
+  assert(panel.inputs > 10, `panel built (${panel.inputs} inputs)`);
+  eq([panel.site, panel.siteRowHidden], ['Gemini', false], 'site row');
+  const csp = await page.evaluate(() => window.__csp);
+  eq(csp, [], 'CSP / Trusted Types violations');
+  eq(errors, [], 'page errors');
+});
+
 await test('coexistence: if the extension already claimed the page, the userscript stays idle', async () => {
   const page = await open({ preset: () => document.documentElement.setAttribute('data-alr-runtime', 'extension') });
   await settle(page, 1500);
@@ -242,7 +276,7 @@ await test('coexistence: if the extension already claimed the page, the userscri
   eq(r.runtime, 'extension', 'marker untouched');
 });
 
-await test('no requests except chatgpt.com and the two pinned font hosts', async () => {
+await test('no requests except the page and the two pinned font hosts', async () => {
   eq(external, [], 'unexpected hosts');
 });
 

@@ -3,7 +3,8 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { assistantTurn, blockMath, codeBlock, inlineMath, list, para, table, text, userTurn } from '../fixtures/chatgpt-page.mjs';
 import { detectFailure, findRenderedUnits, getTexSource, isDisplayUnit, usesPreferred } from '../../src/dom/katex';
-import { authorOf, messageRoots } from '../../src/dom/scope';
+import { authorOf, configureSite, messageRoots } from '../../src/dom/scope';
+import { siteFor } from '../../src/sites/sites';
 import {
   applyBlock, collectText, findRawBlocks, forgetDetached, isUpToDate, restoreAllBlocks, restoreBlock, scanBlock, stateOf,
 } from '../../src/dom/rawText';
@@ -16,6 +17,7 @@ function mount(html: string) {
 
 beforeEach(() => {
   document.body.innerHTML = '';
+  configureSite(siteFor('chatgpt.com'));
 });
 
 describe('rendered formulas (KaTeX)', () => {

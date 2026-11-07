@@ -1,19 +1,19 @@
 /**
- * Orchestrates discovery -> rendering -> DOM application for the ChatGPT page.
+ * Orchestrates discovery -> rendering -> DOM application for a chat page (sites: src/sites/sites.ts).
  * Read docs/design/chatgpt-dom.md before changing how the DOM is modified.
  */
 import type { TexEngine } from '../render/engine';
 import type { EngineFactory } from '../render/domEngine';
-import { type Settings, parseCommandList } from '../shared/settings';
+import { type Settings, enabledOn, parseCommandList } from '../shared/settings';
 import type { FormulaError, Status } from '../shared/messages';
 import { parseMacros } from '../tex/macros';
 import { preprocessTex } from '../tex/preprocess';
 import type { MathSegment, ScanOptions } from '../tex/delimiters';
 import {
-  detectFailure, findPreviewErrors, findRenderedUnits, getCodeBlockSource, getTexSource, isDisplayUnit, usesPreferred, UNIT_SELECTOR,
+  detectFailure, findPreviewErrors, findRenderedUnits, getCodeBlockSource, getTexSource, HOST_SELECTOR, isDisplayUnit, usesPreferred, UNIT_SELECTOR,
 } from '../dom/katex';
 import { splitLatexSnippet } from '../tex/snippet';
-import { authorOf, messageRoots } from '../dom/scope';
+import { authorOf, currentSite, messageRoots } from '../dom/scope';
 import {
   applyBlock, collectText, findRawBlocks, forgetDetached, isUpToDate, restoreAllBlocks, restoreBlock, scanBlock, stateOf, BLOCK_SELECTOR,
 } from '../dom/rawText';
@@ -61,7 +61,12 @@ export class Controller {
     document.addEventListener('click', (e) => this.onClick(e), true);
     // Capture phase on window: runs before the page's own TeX-copy handler (see copy.ts).
     window.addEventListener('copy', (e) => this.active && handleCopy(e), true);
-    if (settings.enabled) this.enable();
+    if (this.on(settings)) this.enable();
+  }
+
+  /** Enabled globally and not switched off for this site. */
+  private on(s: Settings = this.settings): boolean {
+    return enabledOn(s, currentSite().id);
   }
 
   /* ------------------------------------------------------------ lifecycle */
@@ -93,12 +98,12 @@ export class Controller {
     const prev = this.settings;
     this.settings = next;
     this.computeDerived();
-    if (!next.enabled) return this.disable();
+    if (!this.on(next)) return this.disable();
     const engineChanged = prev.macrosText !== next.macrosText || prev.physicsOverridesStandard !== next.physicsOverridesStandard;
     if (engineChanged) this.engine = null;
     const renderChanged = engineChanged || prev.scale !== next.scale || prev.smartBraket !== next.smartBraket || prev.siunitx !== next.siunitx;
     if (renderChanged) this.cache.clear();
-    if (!prev.enabled || !this.active) return this.enable();
+    if (!this.on(prev) || !this.active) return this.enable();
     this.rerender();
   }
 
@@ -440,10 +445,10 @@ export class Controller {
   /* --------------------------------------------------------- interaction */
 
   private onClick(e: MouseEvent) {
-    if (!e.altKey || !this.settings.altClickCopy || !this.settings.enabled) return;
+    if (!e.altKey || !this.settings.altClickCopy || !this.active) return;
     const target = e.target as Element | null;
     const ours = target?.closest?.('alr-math');
-    const native = ours ? null : target?.closest?.('.katex-display, .katex, .katex-error');
+    const native = ours ? null : (target?.closest?.(HOST_SELECTOR) ?? target?.closest?.('.katex-display, .katex, .katex-error'));
     const tex = ours?.getAttribute('data-alr-tex') ?? (native ? getTexSource(native) : null);
     if (!tex) return;
     e.preventDefault();
@@ -456,11 +461,13 @@ export class Controller {
 
   status(): Status {
     const units = findRenderedUnits(document);
+    const site = currentSite();
     return {
+      site: { id: site.id, name: site.name },
       engine: this.engineState,
       engineError: this.engineError,
       mathjaxVersion: this.mathjaxVersion,
-      enabled: this.settings.enabled,
+      enabled: this.on(),
       mode: this.settings.mode,
       counts: {
         katexSeen: units.length,

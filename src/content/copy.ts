@@ -1,14 +1,14 @@
 /**
  * Copy handling for selections that include formulas rendered by this extension.
  *
- * ChatGPT (like KaTeX's copy-tex) rewrites copies by cloning the selected DOM and replacing each
+ * ChatGPT and other chat pages (like KaTeX's copy-tex) rewrites copies by cloning the selected DOM and replacing each
  * `.katex` with its TeX - ignoring CSS. With our formulas on the page that clone contains the
  * hidden original KaTeX AND our MathJax node (with its invisible LaTeX helper), so formulas came
  * out two or three times. When a selection touches one of our nodes we build the clipboard
  * content ourselves: each formula exactly once, as $...$ (inline) or $$...$$ (display).
  * Selections without our nodes are left entirely to the page.
  */
-import { getTexSource, isDisplayUnit } from '../dom/katex';
+import { getTexSource, HOST_SELECTOR, isDisplayUnit } from '../dom/katex';
 
 const BLOCK = new Set(['P', 'DIV', 'LI', 'UL', 'OL', 'TR', 'TABLE', 'BLOCKQUOTE', 'PRE', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'SECTION', 'ARTICLE', 'DD', 'DT', 'FIGURE']);
 
@@ -48,7 +48,7 @@ export function selectionFragment(range: Range): DocumentFragment {
   // Native KaTeX left in the selection -> TeX as well, so the output is consistent.
   // Document order puts .katex-display before its inner .katex; once the display is replaced the
   // inner one is no longer in the fragment and is skipped.
-  frag.querySelectorAll('.katex-display, .katex').forEach((k) => {
+  frag.querySelectorAll(`${HOST_SELECTOR}, .katex-display, .katex`).forEach((k) => {
     if (!frag.contains(k)) return;
     const tex = getTexSource(k);
     if (tex !== null) k.replaceWith(doc.createTextNode(wrap(tex, isDisplayUnit(k))));

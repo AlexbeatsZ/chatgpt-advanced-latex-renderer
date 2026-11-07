@@ -7,16 +7,31 @@ import { commandsIn } from '../tex/braces';
 /** Nodes created by this extension. */
 export const OWN_SELECTOR = 'alr-math, alr-text';
 
-export const UNIT_SELECTOR = '.katex-display, .katex, .katex-error, mjx-container';
+/**
+ * Some pages wrap each formula in an element that carries its source, e.g. ChatGPT's newer
+ * `<span role="math" data-math-source="..." data-client-katex-layout>` (KaTeX HTML-only output,
+ * no MathML annotation). The wrapper is then the unit we hide and stand in for.
+ */
+export const HOST_SELECTOR = '[data-math-source]';
+
+export const UNIT_SELECTOR = `.katex-display, .katex, .katex-error, mjx-container, ${HOST_SELECTOR}`;
 
 /**
- * The outermost element of one rendered formula: `.katex-display`, a standalone `.katex`,
- * a KaTeX parse-error span (`.katex-error`, whose text is the TeX source) or `mjx-container`.
+ * The outermost element of one rendered formula: a source-carrying wrapper (HOST_SELECTOR),
+ * `.katex-display`, a standalone `.katex`, a KaTeX parse-error span (`.katex-error`, whose text is
+ * the TeX source) or `mjx-container`.
  */
 export function findRenderedUnits(root: ParentNode): Element[] {
   const out: Element[] = [];
   root.querySelectorAll(UNIT_SELECTOR).forEach((el) => {
     if (el.closest(OWN_SELECTOR)) return;
+    if (el.parentElement?.closest(HOST_SELECTOR)) return; // the wrapper is the unit
+    if (el.matches(HOST_SELECTOR)) {
+      if (!el.getAttribute('data-math-source')?.trim()) return;
+      if (el.parentElement?.closest('.katex, mjx-container')) return;
+      out.push(el);
+      return;
+    }
     if ((el.matches('.katex') || el.matches('.katex-error')) && el.parentElement?.closest('.katex-display')) return;
     if (el.matches('mjx-container') && el.parentElement?.closest('mjx-container')) return;
     if (el.parentElement?.closest('.katex')) return; // nested inside another formula
@@ -27,15 +42,24 @@ export function findRenderedUnits(root: ParentNode): Element[] {
 
 export function isDisplayUnit(unit: Element): boolean {
   if (unit.matches('.katex-display')) return true;
-  if (unit.matches('.katex-error')) return !!unit.parentElement?.closest('[data-d-block], .katex-display');
+  if (unit.matches(HOST_SELECTOR)) {
+    const d = unit.getAttribute('display') ?? unit.getAttribute('data-display');
+    if (d) return d === 'block' || d === 'true';
+    return !!unit.querySelector('.katex-display') || !!unit.parentElement?.closest('[data-d-block], .math-block');
+  }
+  if (unit.matches('.katex-error')) return !!unit.parentElement?.closest('[data-d-block], .katex-display, .math-block');
   if (unit.matches('mjx-container')) return unit.getAttribute('display') === 'true';
   return false;
 }
 
-const SOURCE_ATTRS = ['data-latex', 'data-tex', 'data-math', 'data-formula'];
+const SOURCE_ATTRS = ['data-math-source', 'data-latex', 'data-tex', 'data-math', 'data-formula'];
 
 /** Recovers the original TeX, or null if it is not present in the DOM. Never reverse-engineers glyphs. */
 export function getTexSource(unit: Element): string | null {
+  if (unit.matches(HOST_SELECTOR)) {
+    const v = unit.getAttribute('data-math-source')?.trim();
+    if (v) return stripDelimiters(v);
+  }
   // KaTeX parse errors render the original TeX source as the span's text.
   if (unit.matches('.katex-error')) return unit.textContent?.trim() || null;
   const err = unit.querySelector(':scope > .katex-error');
@@ -88,7 +112,8 @@ export function detectFailure(unit: Element): FailureInfo {
     }
   });
   if (!failed) {
-    unit.querySelectorAll('.katex-html [style*="color"]').forEach((el) => {
+    // KaTeX's HTML side (also when the page renders HTML-only, without MathML).
+    unit.querySelectorAll('[style*="color"]').forEach((el) => {
       const color = (el as HTMLElement).style?.color ?? '';
       if (RED.test(color.trim())) {
         failed = true;

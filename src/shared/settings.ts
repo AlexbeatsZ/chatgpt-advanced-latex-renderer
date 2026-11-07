@@ -22,6 +22,8 @@ export interface Settings {
   siunitx: boolean;
   /** Alt+click on a MathJax formula copies its LaTeX source. */
   altClickCopy: boolean;
+  /** Site ids (src/sites/sites.ts) where rendering is switched off. */
+  disabledSites: string[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -38,6 +40,7 @@ export const DEFAULT_SETTINGS: Settings = {
   smartBraket: true,
   siunitx: true,
   altClickCopy: true,
+  disabledSites: [],
 };
 
 export const STORAGE_KEY = 'alrSettings';
@@ -52,7 +55,13 @@ export function normalizeSettings(raw: unknown): Settings {
   const out = s as unknown as Settings;
   if (out.mode !== 'compat' && out.mode !== 'full') out.mode = 'compat';
   out.scale = Math.min(250, Math.max(50, Math.round(out.scale)));
+  out.disabledSites = Array.isArray(out.disabledSites) ? [...new Set(out.disabledSites.filter((x) => typeof x === 'string'))] : [];
   return out;
+}
+
+/** True if rendering is on for the given site. */
+export function enabledOn(s: Settings, siteId: string): boolean {
+  return s.enabled && !s.disabledSites.includes(siteId);
 }
 
 export function parseCommandList(s: string): string[] {

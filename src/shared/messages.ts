@@ -8,6 +8,8 @@ export interface FormulaError {
 }
 
 export interface Status {
+  /** site profile in use on this page (src/sites/sites.ts) */
+  site: { id: string; name: string };
   engine: 'idle' | 'loading' | 'ready' | 'error';
   engineError?: string;
   mathjaxVersion?: string;

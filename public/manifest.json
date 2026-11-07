@@ -2,22 +2,109 @@
   "manifest_version": 3,
   "name": "ChatGPT Advanced LaTeX Renderer",
   "short_name": "Advanced LaTeX",
-  "version": "0.2.1",
-  "description": "Local MathJax 4 rendering for ChatGPT: mhchem (\\ce, \\pu), physics, AMS environments and custom macros. No data leaves the browser.",
+  "version": "0.3.0",
+  "description": "Local MathJax 4 LaTeX for ChatGPT, Claude, Gemini, DeepSeek and more AI chats: mhchem, physics, AMS, macros. Fully offline.",
   "minimum_chrome_version": "120",
-  "permissions": ["storage"],
+  "permissions": [
+    "storage"
+  ],
   "content_scripts": [
     {
-      "matches": ["https://chatgpt.com/*", "https://chat.openai.com/*"],
-      "js": ["content-loader.js"],
-      "css": ["content.css"],
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://claude.ai/*",
+        "https://gemini.google.com/*",
+        "https://business.gemini.google/*",
+        "https://aistudio.google.com/*",
+        "https://notebooklm.google.com/*",
+        "https://chat.deepseek.com/*",
+        "https://grok.com/*",
+        "https://*.grok.com/*",
+        "https://www.kimi.com/*",
+        "https://kimi.com/*",
+        "https://www.kimi.ai/*",
+        "https://kimi.moonshot.cn/*",
+        "https://www.doubao.com/*",
+        "https://doubao.com/*",
+        "https://chat.qwen.ai/*",
+        "https://www.qianwen.com/*",
+        "https://qianwen.com/*",
+        "https://www.tongyi.com/*",
+        "https://tongyi.aliyun.com/*",
+        "https://yuanbao.tencent.com/*",
+        "https://chatglm.cn/*",
+        "https://chat.z.ai/*",
+        "https://www.perplexity.ai/*",
+        "https://perplexity.ai/*",
+        "https://copilot.microsoft.com/*",
+        "https://chat.mistral.ai/*",
+        "https://poe.com/*",
+        "https://lmarena.ai/*",
+        "https://beta.lmarena.ai/*",
+        "https://huggingface.co/chat*",
+        "https://openrouter.ai/chat*",
+        "https://metaso.cn/*",
+        "https://agent.minimaxi.com/*",
+        "https://agent.minimax.io/*",
+        "https://chat.minimaxi.com/*",
+        "https://chat.minimax.io/*"
+      ],
+      "js": [
+        "content-loader.js"
+      ],
+      "css": [
+        "content.css"
+      ],
       "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["content/*", "chunks/*"],
-      "matches": ["https://chatgpt.com/*", "https://chat.openai.com/*"]
+      "resources": [
+        "content/*",
+        "chunks/*"
+      ],
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://claude.ai/*",
+        "https://gemini.google.com/*",
+        "https://business.gemini.google/*",
+        "https://aistudio.google.com/*",
+        "https://notebooklm.google.com/*",
+        "https://chat.deepseek.com/*",
+        "https://grok.com/*",
+        "https://*.grok.com/*",
+        "https://www.kimi.com/*",
+        "https://kimi.com/*",
+        "https://www.kimi.ai/*",
+        "https://kimi.moonshot.cn/*",
+        "https://www.doubao.com/*",
+        "https://doubao.com/*",
+        "https://chat.qwen.ai/*",
+        "https://www.qianwen.com/*",
+        "https://qianwen.com/*",
+        "https://www.tongyi.com/*",
+        "https://tongyi.aliyun.com/*",
+        "https://yuanbao.tencent.com/*",
+        "https://chatglm.cn/*",
+        "https://chat.z.ai/*",
+        "https://www.perplexity.ai/*",
+        "https://perplexity.ai/*",
+        "https://copilot.microsoft.com/*",
+        "https://chat.mistral.ai/*",
+        "https://poe.com/*",
+        "https://lmarena.ai/*",
+        "https://beta.lmarena.ai/*",
+        "https://huggingface.co/chat*",
+        "https://openrouter.ai/chat*",
+        "https://metaso.cn/*",
+        "https://agent.minimaxi.com/*",
+        "https://agent.minimax.io/*",
+        "https://chat.minimaxi.com/*",
+        "https://chat.minimax.io/*"
+      ]
     }
   ],
   "action": {

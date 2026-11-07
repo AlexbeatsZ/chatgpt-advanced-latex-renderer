@@ -11,6 +11,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import * as F from '../fixtures/chatgpt-page.mjs';
+import * as S from '../fixtures/sites-page.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const require = createRequire(import.meta.url);
@@ -92,6 +93,16 @@ for (let i = 0; i < 60; i++) {
 addPage('long', longTurns);
 addPage('long-inner', longTurns, { innerScroll: true });
 
+// Other sites, each with the kind of security headers the real site sends (strict CSP on
+// claude.ai, Trusted Types on Google properties).
+const sitePages = {
+  'claude.ai': { html: S.claude(), headers: { 'content-security-policy': "script-src 'self'; style-src 'self'" } },
+  'gemini.google.com': { html: S.gemini(), headers: { 'content-security-policy': "require-trusted-types-for 'script'" } },
+  'chat.deepseek.com': { html: S.deepseek(), headers: {} },
+};
+pages['math-source'] = S.chatgptMathSource();
+const HOSTS = new Set(['chatgpt.com', ...Object.keys(sitePages)]);
+
 // ---------------------------------------------------------------- runner
 const results = [];
 const external = [];
@@ -111,7 +122,7 @@ async function setup() {
   await ctx.route('**/*', (route) => {
     const url = new URL(route.request().url());
     if (url.protocol === 'chrome-extension:') return route.continue();
-    if (url.hostname !== 'chatgpt.com') {
+    if (!HOSTS.has(url.hostname)) {
       external.push(url.href);
       return route.abort();
     }
@@ -122,6 +133,8 @@ async function setup() {
       const type = file.endsWith('.css') ? 'text/css' : file.endsWith('.woff2') ? 'font/woff2' : 'application/octet-stream';
       return route.fulfill({ status: 200, body: fs.readFileSync(file), headers: { 'content-type': type } });
     }
+    const site = sitePages[url.hostname];
+    if (site) return route.fulfill({ status: 200, body: site.html, headers: { 'content-type': 'text/html; charset=utf-8', ...site.headers } });
     const name = url.pathname.replace(/^\/+/, '') || 'main';
     if (!pages[name]) return route.fulfill({ status: 404, body: 'no fixture' });
     return route.fulfill({ status: 200, body: pages[name], headers: { 'content-type': 'text/html; charset=utf-8' } });
@@ -149,7 +162,11 @@ async function open(name) {
     if (m.type() === 'error' || m.text().includes('[ALR]')) console.log(`   [console:${m.type()}] ${m.text()}`);
   });
   page.on('pageerror', (e) => console.log('   [pageerror]', e.message));
-  await page.goto(`https://chatgpt.com/${name === 'main' ? '' : name}`);
+  await page.addInitScript(() => {
+    window.__csp = [];
+    document.addEventListener('securitypolicyviolation', (e) => window.__csp.push(`${e.violatedDirective} ${e.blockedURI} ${e.sourceFile}`));
+  });
+  await page.goto(name.startsWith('https://') ? name : `https://chatgpt.com/${name === 'main' ? '' : name}`);
   return page;
 }
 
@@ -199,7 +216,7 @@ async function test(name, fn) {
     results.push({ name, ok: false, ms: Date.now() - t0, error: e.message });
     console.log(`✗ ${name}\n   ${e.stack?.split('\n').slice(0, 3).join('\n   ')}`);
   } finally {
-    for (const p of ctx.pages()) if (p.url().startsWith('https://chatgpt.com')) await p.close().catch(() => {});
+    for (const p of ctx.pages()) if (p.url().startsWith('https://')) await p.close().catch(() => {});
   }
 }
 
@@ -509,7 +526,7 @@ await test('selection copy yields LaTeX; Alt+click copies source', async () => {
   eq(clip, '\\ce{A <=> B}', 'clipboard after Alt+click');
 });
 
-await test('no network requests outside chatgpt.com (no CDN, no telemetry)', async () => {
+await test('no network requests outside the page (no CDN, no telemetry)', async () => {
   const before = external.length;
   const page = await open('main');
   await settle(page, 1500);
@@ -580,12 +597,89 @@ await test('inner scroll container (like chatgpt.com): formulas below the fold a
   eq(r.pending, 0, 'after scrolling, formulas below the new fold are pre-rendered too');
 });
 
-await test('popup renders and reports "not a ChatGPT tab" outside ChatGPT', async () => {
+// ---------------------------------------------------------------- other sites
+const siteState = (page) =>
+  page.evaluate(() => ({
+    tex: [...document.querySelectorAll('alr-math')].filter((m) => m.getClientRects().length).map((m) => `${m.getAttribute('data-alr-src')}:${m.getAttribute('data-alr-tex')}`),
+    hidden: document.querySelectorAll('[data-alr-hidden]').length,
+    missingGlyphs: [...document.querySelectorAll('alr-math svg text')].filter((t) => !t.textContent || /[\uE000-\uF8FF]/.test(t.textContent)).length,
+    styled: [...document.querySelectorAll('alr-math[data-alr-display="block"]')].every((m) => getComputedStyle(m).display === 'block'),
+    mjxStyled: (() => {
+      const c = document.querySelector('alr-math mjx-container');
+      return !c || getComputedStyle(c).getPropertyValue('direction') !== '' ;
+    })(),
+    csp: window.__csp,
+    runtime: document.documentElement.getAttribute('data-alr-runtime'),
+    composer: document.getElementById('composer').innerHTML,
+  }));
+
+await test('Claude (strict CSP): failed \\ce upgraded, user message untouched, raw \\(...\\) rendered', async () => {
+  const page = await open('https://claude.ai/chat/1');
+  await settle(page, 1500);
+  const r = await siteState(page);
+  eq(r.runtime, 'extension', 'runtime marker');
+  eq(r.tex.sort(), ['katex:\\ce{2H2 + O2 -> 2H2O}', 'katex:\\pu{-285.8 kJ mol-1}', 'text:\\ce{NaCl}'].sort(), 'rendered formulas');
+  eq(r.missingGlyphs, 0, 'missing glyphs');
+  assert(r.styled, 'content.css applies despite style-src CSP');
+  const userText = await page.textContent('[data-testid="user-message"]');
+  assert(userText.includes('$\\ce{H2O}$'), 'user message left as typed');
+  eq(r.composer, '$x^2$ draft', 'composer untouched');
+  console.log(`   CSP reports: ${JSON.stringify(r.csp)}`);
+});
+
+await test('Gemini (Trusted Types): HTML-only KaTeX with data-math is upgraded, no TT violations', async () => {
+  const page = await open('https://gemini.google.com/app/1');
+  await settle(page, 1500);
+  const r = await siteState(page);
+  eq(r.tex.sort(), ['katex:\\ce{A <=> B}', 'katex:\\ce{H2O}'].sort(), 'upgraded formulas');
+  eq(r.missingGlyphs, 0, 'missing glyphs');
+  eq(r.csp.filter((x) => x.includes('trusted-types')), [], 'Trusted Types violations');
+  await setSettings({ mode: 'full' });
+  await settle(page, 1500);
+  const full = await siteState(page);
+  eq(full.tex.length, 3, 'full mode renders every recoverable formula');
+});
+
+await test('DeepSeek: \\ce and preferred \\bra/\\ket upgraded, plain KaTeX kept', async () => {
+  const page = await open('https://chat.deepseek.com/a/chat/s/1');
+  await settle(page, 1500);
+  const r = await siteState(page);
+  eq(r.tex.sort(), ['katex:\\bra{\\psi}\\ket{\\phi}', 'katex:\\ce{A -> B}'].sort(), 'upgraded formulas');
+  eq(r.hidden, 2, 'two originals hidden');
+});
+
+await test('ChatGPT data-math-source wrappers (HTML-only KaTeX) are recovered and upgraded', async () => {
+  const page = await open('math-source');
+  await settle(page, 1500);
+  const r = await siteState(page);
+  eq(r.tex.sort(), ['katex:\\ce{CO2}', 'katex:\\ce{Fe^{3+} + e- -> Fe^{2+}}'].sort(), 'upgraded formulas');
+  const display = await page.evaluate(() => document.querySelector('alr-math[data-alr-tex^="\\\\ce{Fe"]').getAttribute('data-alr-display'));
+  eq(display, 'block', 'display wrapper stays display');
+});
+
+await test('per-site switch: disabling one site restores it, other sites keep rendering', async () => {
+  const page = await open('https://chat.deepseek.com/a/chat/s/1');
+  await settle(page, 1500);
+  await setSettings({ disabledSites: ['deepseek'] });
+  await settle(page, 800);
+  let r = await siteState(page);
+  eq([r.tex.length, r.hidden], [0, 0], 'deepseek restored');
+  const other = await open('https://claude.ai/chat/1');
+  await settle(other, 1500);
+  r = await siteState(other);
+  eq(r.tex.length, 3, 'claude still rendered');
+  await setSettings({ disabledSites: [] });
+  await settle(page, 1500);
+  r = await siteState(page);
+  eq(r.tex.length, 2, 'deepseek re-enabled');
+});
+
+await test('popup renders and reports "not a supported tab" outside supported sites', async () => {
   const page = await ctx.newPage();
   await page.goto(`chrome-extension://${extId}/popup.html`);
   await page.waitForTimeout(800);
   const t = await page.textContent('#engine-text');
-  assert(t.includes('不是 ChatGPT'), `popup status text: ${t}`);
+  assert(t.includes('不是支持的'), `popup status text: ${t}`);
   assert(await page.isChecked('#enabled'), 'enabled checkbox');
   await page.screenshot({ path: path.join(outDir, 'popup.png') });
   await page.close();

@@ -178,9 +178,15 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 6px;
 }
+[hidden] {
+  display: none !important;
+}
 .check {
   display: block;
   margin: 5px 0;
+}
+.site-row {
+  margin: 2px 0 8px;
 }
 code {
   font: 11.5px ui-monospace, Consolas, monospace;

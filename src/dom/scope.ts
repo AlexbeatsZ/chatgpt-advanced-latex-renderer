@@ -1,35 +1,57 @@
 /**
- * Where to look and what to skip. Selectors are ordered from the most semantic (role/data
- * attributes) to generic fallbacks; hashed CSS-module class names are never used.
+ * Where to look and what to skip. Message selectors come from the current site's entry in
+ * src/sites/sites.ts (semantic / data attributes first; hashed CSS-module class names avoided).
  */
 import { OWN_SELECTOR } from './katex';
+import { type Site, selectorsFor, siteFor, SITES } from '../sites/sites';
 
 export type Author = 'assistant' | 'user' | 'unknown';
 
-const ASSISTANT_SELECTORS = [
-  '[data-message-author-role="assistant"]',
-  '[data-content-search-unit-key$=":assistant"]',
-  '[data-chatgpt-search-unit-key$=":assistant"]',
-  '[data-markdown-text-style="assistant-message"]',
-];
-const USER_SELECTORS = [
-  '[data-message-author-role="user"]',
-  '[data-content-search-unit-key$=":user"]',
-  '[data-chatgpt-search-unit-key$=":user"]',
-];
+let assistantSel = '';
+let userSel = '';
+let messageSel = '';
+let current: Site = SITES[0];
 
-export const MESSAGE_SELECTOR = [...ASSISTANT_SELECTORS, ...USER_SELECTORS].join(',');
+/** Keeps only selectors the browser accepts: one bad entry would invalidate the whole list. */
+function valid(list: string[]): string[] {
+  return list.filter((s) => {
+    try {
+      document.createDocumentFragment().querySelector(s);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
+
+/** Selects the site profile used by messageRoots/authorOf (default: from the current location). */
+export function configureSite(site: Site = siteFor(location.hostname, location.pathname)): Site {
+  current = site;
+  const sel = selectorsFor(site);
+  const a = valid(sel.assistant);
+  const u = valid(sel.user);
+  assistantSel = a.join(',');
+  userSel = u.join(',');
+  messageSel = [...a, ...u].join(',');
+  return site;
+}
+
+export function currentSite(): Site {
+  if (!messageSel) configureSite();
+  return current;
+}
 
 /** Regions whose text must never be treated as math, and that math cannot span. */
 export const EXCLUDED_SELECTOR = [
   'pre', 'code', 'kbd', 'samp', 'textarea', 'input', 'select', 'button', 'script', 'style', 'svg',
   '.cm-editor', '[contenteditable=""]', '[contenteditable="true"]', '[contenteditable="plaintext-only"]',
-  '.katex', '.katex-display', '.katex-error', 'mjx-container', 'math', OWN_SELECTOR, '[data-alr-skip]',
+  '.katex', '.katex-display', '.katex-error', 'mjx-container', 'math', '[data-math-source]', OWN_SELECTOR, '[data-alr-skip]',
 ].join(',');
 
 export function authorOf(el: Element): Author {
-  if (el.closest(ASSISTANT_SELECTORS.join(','))) return 'assistant';
-  if (el.closest(USER_SELECTORS.join(','))) return 'user';
+  currentSite();
+  if (assistantSel && el.closest(assistantSel)) return 'assistant';
+  if (userSel && el.closest(userSel)) return 'user';
   return 'unknown';
 }
 
@@ -38,7 +60,9 @@ export function authorOf(el: Element): Author {
  * match so nested markers (e.g. a markdown root inside a turn) are not processed twice.
  */
 export function messageRoots(root: ParentNode, includeUser: boolean): Element[] {
-  const sel = includeUser ? MESSAGE_SELECTOR : ASSISTANT_SELECTORS.join(',');
+  currentSite();
+  const sel = includeUser ? messageSel : assistantSel;
+  if (!sel) return [];
   const set = new Set<Element>();
   if (root instanceof Element) {
     const up = root.closest(sel);

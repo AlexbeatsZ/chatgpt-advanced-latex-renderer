@@ -63,6 +63,15 @@ function pruneFontCache() {
 }
 
 function addStyle(css: string) {
+  // A constructed stylesheet is immune to the page's style-src CSP; GM_addStyle as fallback.
+  try {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(css);
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+    return;
+  } catch {
+    /* constructed stylesheets unavailable */
+  }
   if (typeof GM_addStyle === 'function') GM_addStyle(css);
   else document.head.appendChild(Object.assign(document.createElement('style'), { textContent: css }));
 }

@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { matchPatterns } from '../src/sites/sites.ts';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
@@ -19,21 +20,25 @@ if (pkg.version !== manifest.version) throw new Error(`package.json ${pkg.versio
 
 execSync('node scripts/gen-userscript-fonts.mjs', { cwd: root, stdio: 'inherit' });
 
+const matches = matchPatterns();
+if (JSON.stringify(matches) !== JSON.stringify(manifest.content_scripts[0].matches)) {
+  throw new Error('public/manifest.json matches differ from src/sites/sites.ts (update the manifest)');
+}
+
 const header = `// ==UserScript==
 // @name         ChatGPT Advanced LaTeX Renderer
-// @name:zh-CN   ChatGPT 高级 LaTeX 渲染（MathJax 4 · mhchem · physics）
+// @name:zh-CN   AI 对话高级 LaTeX 渲染（ChatGPT · Claude · Gemini · DeepSeek 等，MathJax 4 · mhchem · physics）
 // @namespace    https://github.com/${REPO}
 // @version      ${pkg.version}
-// @description  Local MathJax 4 rendering for ChatGPT: mhchem (\\ce, \\pu), physics, AMS environments and custom macros. Font data is fetched on demand from jsDelivr/GitHub and verified with SHA-256.
-// @description:zh-CN  用 MathJax 4 增强 ChatGPT 的 LaTeX 渲染：化学 \\ce、\\pu，physics 宏包，AMS 环境与自定义宏。字体数据按需从 jsDelivr/GitHub 下载并校验 SHA-256。
+// @description  Local MathJax 4 rendering for ChatGPT, Claude, Gemini, AI Studio, DeepSeek, Grok, Kimi, Doubao, Qwen and other AI chats: mhchem (\\ce, \\pu), physics, AMS environments and custom macros. Font data is fetched on demand from jsDelivr/GitHub and verified with SHA-256.
+// @description:zh-CN  用 MathJax 4 增强 ChatGPT、Claude、Gemini、AI Studio、DeepSeek、Grok、Kimi、豆包、通义千问、元宝、智谱等 AI 对话网站的 LaTeX 渲染：化学 \\ce、\\pu，physics 宏包，AMS 环境与自定义宏。字体数据按需从 jsDelivr/GitHub 下载并校验 SHA-256。
 // @author       ${REPO.split('/')[0]}
 // @license      MIT
 // @homepageURL  https://github.com/${REPO}
 // @supportURL   https://github.com/${REPO}/issues
 // @downloadURL  ${latest}/${NAME}.user.js
 // @updateURL    ${latest}/${NAME}.meta.js
-// @match        https://chatgpt.com/*
-// @match        https://chat.openai.com/*
+${matches.map((m) => `// @match        ${m}`).join('\n')}
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_deleteValue

@@ -28,8 +28,16 @@ export function openPanel(api: PanelApi) {
   host = document.createElement('alr-panel-host');
   host.setAttribute('data-alr-skip', '');
   const shadow = host.attachShadow({ mode: 'open' });
-  const style = document.createElement('style');
-  style.textContent = css;
+  // Constructed stylesheets are not subject to the page's style-src CSP (claude.ai, Gemini...).
+  let style: HTMLStyleElement | null = null;
+  try {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(css);
+    shadow.adoptedStyleSheets = [sheet];
+  } catch {
+    style = document.createElement('style');
+    style.textContent = css;
+  }
   const box = document.createElement('div');
   box.className = 'alr-panel';
   const close = document.createElement('button');
@@ -40,7 +48,8 @@ export function openPanel(api: PanelApi) {
   close.addEventListener('click', closePanel);
   const content = document.createElement('div');
   box.append(close, content);
-  shadow.append(style, box);
+  if (style) shadow.append(style);
+  shadow.append(box);
   document.body.appendChild(host);
   dispose = mountPanel(shadow, content, api);
   const onKey = (e: KeyboardEvent) => {
