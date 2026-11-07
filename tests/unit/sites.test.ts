@@ -3,7 +3,7 @@
 // pages use. DOM snippets mirror the structures documented in docs/design/sites.md.
 import fs from 'node:fs';
 import { describe, expect, it, beforeEach } from 'vitest';
-import { matchPatterns, siteFor, SITES } from '../../src/sites/sites';
+import { matchPatterns, originPatterns, siteFor, SITES } from '../../src/sites/sites';
 import { authorOf, configureSite, messageRoots } from '../../src/dom/scope';
 import { detectFailure, findRenderedUnits, getTexSource, isDisplayUnit } from '../../src/dom/katex';
 import { buildFragment } from '../../src/ui/html';
@@ -22,7 +22,9 @@ describe('site registry', () => {
   it('manifest matches are generated from the site list', () => {
     const manifest = JSON.parse(fs.readFileSync('public/manifest.json', 'utf8'));
     expect(manifest.content_scripts[0].matches).toEqual(matchPatterns());
-    expect(manifest.web_accessible_resources[0].matches).toEqual(matchPatterns());
+    // web_accessible_resources only accepts path "/*" (anything else: the extension fails to load)
+    expect(manifest.web_accessible_resources[0].matches).toEqual(originPatterns());
+    for (const p of originPatterns()) expect(p).toMatch(/^https:\/\/[^/]+\/\*$/);
   });
 
   it('site ids are unique and patterns are valid Chrome match patterns', () => {

@@ -3,7 +3,7 @@
   "name": "ChatGPT Advanced LaTeX Renderer",
   "short_name": "Advanced LaTeX",
   "version": "0.3.0",
-  "description": "Local MathJax 4 LaTeX for ChatGPT, Claude, Gemini, DeepSeek and more AI chats: mhchem, physics, AMS, macros. Fully offline.",
+  "description": "Local MathJax 4 LaTeX rendering for ChatGPT, Claude, Gemini, AI Studio, DeepSeek, Grok, Kimi, Doubao, Qwen and more: mhchem (\\ce, \\pu), physics, AMS, custom macros. No data leaves the browser.",
   "minimum_chrome_version": "120",
   "permissions": [
     "storage"
@@ -97,8 +97,8 @@
         "https://poe.com/*",
         "https://lmarena.ai/*",
         "https://beta.lmarena.ai/*",
-        "https://huggingface.co/chat*",
-        "https://openrouter.ai/chat*",
+        "https://huggingface.co/*",
+        "https://openrouter.ai/*",
         "https://metaso.cn/*",
         "https://agent.minimaxi.com/*",
         "https://agent.minimax.io/*",

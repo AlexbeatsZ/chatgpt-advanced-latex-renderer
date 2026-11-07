@@ -162,6 +162,14 @@ export function matchPatterns(sites: Site[] = SITES): string[] {
   return [...new Set(out)];
 }
 
+/**
+ * Origin-only patterns (path `/*`): `web_accessible_resources.matches` rejects any other path, and
+ * an invalid entry makes Chrome refuse to load the whole extension.
+ */
+export function originPatterns(sites: Site[] = SITES): string[] {
+  return [...new Set(sites.flatMap((s) => s.hosts.map((h) => `https://${h.startsWith('.') ? `*${h}` : h}/*`)))];
+}
+
 function hostMatches(pattern: string, hostname: string): boolean {
   return pattern.startsWith('.') ? hostname.endsWith(pattern) : hostname === pattern;
 }
