@@ -16,7 +16,7 @@ TeX（annotation 优先，绝不反推）；流式、长对话、内部导航兼
   `data-math`（Gemini）源码恢复；面板不用 innerHTML（Trusted Types）；样式走可构造样式表（CSP）。
   ChatGPT 以外的网站只在模拟页 e2e 验证，选择器来自开源项目 ophel，**未在真实网站逐一验收**。ChatGPT 新版 `data-math-source` 结构也只来自 ophel 的记录，未亲自观察。
 - 油猴版：约 1.94 MiB，内置引擎与基础字形；额外字形为固定版本 JSON（40 个区段），下载后校验哈希并缓存，不执行远程代码。两种版本以 DOM 标记互斥。
-- 设备：Mac 项目 `/Users/meta/Project/Workspaces/chatgpt-advanced-latex-renderer`（Mac 无 Playwright 浏览器，e2e 在 OMEN 跑）；
+- 设备：Mac 项目 `/Users/meta/Developer/chatgpt-advanced-latex-renderer`（Mac 无 Playwright 浏览器，e2e 在 OMEN 跑）；
   OMEN 项目 `C:\Users\Meta\Project\Workspaces\chatgpt-latex-renderer`（注意目录名不同），其 Chrome 默认配置以“加载已解压”方式加载该目录的 `dist/`，
   有 Playwright chromium-1208，2026-11-07 已更新到 0.3.0 并构建（Chrome 需在扩展页“重新加载”才会用新 manifest）。
   ROG 2026-11-07 前没有任何安装（Tampermonkey `gcalenpjmijncebpfijmoaglllgpjagf` 里无本脚本、无解压扩展）；已克隆到
